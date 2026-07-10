@@ -4,9 +4,8 @@
 
 ## Current Step
 
-- 当前步骤：步骤 2，方案设计与实现路线梳理
-- 当前负责人：user_1
-- 当前状态：进行中，Agent 拆分与流程已初步确定，具体实现方案仍待细化
+- 当前步骤：步骤 3
+- 当前状态：进行中
 
 ## Steps
 
@@ -130,10 +129,7 @@ flowchart TD
 - 全部问题处理完成后，主控编排Agent 聚合本次运行日志，生成 `logs/trace/{yyyyMMdd_HHmmss}.log`。
 - 代码中不得写死 `01_01_teamname/logs`，应基于作品根目录动态定位。
 
-## Assumptions
+## Rules
 
-- Step 2 暂不标记完成，等 Agent 边界、数据结构和实现路线继续细化后再更新。
-- Step 3 暂不写具体负责人，后续由参赛成员自行分配。
-- Step 3 暂不决定使用 Skill、subAgent 或其他具体实现方式。
 - 安全守卫Agent 分为两个能力：问题级完整检查、资源级局部检查。
 - 文件索引Agent 启动后尽量全量扫描一次，索引作为中间件落在`logs/{yyyyMMdd_HHmmss}/`下，后续问题复用索引，避免重复扫描。

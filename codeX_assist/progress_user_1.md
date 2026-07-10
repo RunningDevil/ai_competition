@@ -12,3 +12,5 @@
 - 2026-07-10：根据协作约定，将旧版 `plan_progress.md` 拆分为 `plan.md`、`progress_user_1.md`、`progress_user_2.md`。公共计划只写入 `plan.md`，user_1 详细进展迁移到本文件，user_2 进展预留独立文件。
 - 2026-07-10：根据讨论结果更新 `codeX_assist/plan.md`，补充主控编排Agent、安全守卫Agent、文件索引Agent、办公文档Agent、文本代码Agent、知识问答Agent 的职责，拆解 Step 3 模块需求，并加入文件统计、知识库问答、Office 批注、文本/代码批注、安全保护五类流程图。
 - 2026-07-10：根据讨论结果细化 `codeX_assist/plan.md` 的 Step 3 Module Breakdown：办公文档Agent 保持单 Agent、内部拆 Word/PPT/Excel 处理器；文本代码Agent 保持单 Agent、内部采用通用读取、注释/TODO 提取、结构化解析、后缀规则表和修复器的轻量分层。
+- 2026-07-10：确认协作分工原则：`plan.md` 负责记录公共计划、模块边界、流程和负责人；各 Agent 的 `Agent.md`、是否使用 Skill、Skill 如何编写等实现细节由对应负责人和其 Codex 自行设计，并在个人 progress 文件中记录。主控编排Agent 暂放到最后实现，等安全守卫Agent、文件索引Agent、办公文档Agent、文本代码Agent、知识问答Agent 的输入输出接口基本稳定后再集成。
+- 2026-07-10：阅读 user_1 更新后的 `plan.md` 负责人分工：user2 负责安全守卫Agent、文件索引Agent、文本代码Agent；user1 负责办公文档Agent、知识问答Agent，并在其他 Agent 完成后负责主控编排Agent；日志与中间件、输出与验证暂未指定具体负责人。
