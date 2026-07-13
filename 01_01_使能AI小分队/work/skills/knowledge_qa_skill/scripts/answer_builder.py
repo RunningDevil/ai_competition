@@ -79,6 +79,35 @@ def _build_text_answer(query: Dict[str, Any], evidence: List[Dict[str, Any]]) ->
     return {"datas": unique_preserve_order(datas)[:10]}
 
 
+def _query_users(query: Dict[str, Any]) -> List[str]:
+    users: List[str] = []
+    for keyword in query.get("keywords") or []:
+        text = str(keyword or "").strip()
+        if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{2,}", text) and any(mark in text.lower() for mark in ("user", "op", "admin", "root", "svc", "deploy")):
+            users.append(text)
+    return unique_preserve_order(users)
+
+
+def _build_environment_answer(query: Dict[str, Any], evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
+    datas: List[str] = []
+    users = _query_users(query)
+    ips = query.get("ips") or []
+    for item in evidence:
+        text = str(item.get("text") or "")
+        lines = _best_lines(text, query, per_block=4)
+        for line in lines:
+            if ips and not any(ip in line for ip in ips):
+                continue
+            for user in users:
+                match = re.search(rf"(?<![A-Za-z0-9_]){re.escape(user)}[/：:]\s*([^\s/，,；;]+)", line)
+                if match:
+                    datas.append(match.group(1).strip())
+            if not users:
+                secret_matches = re.findall(r"(?:密码|password|pwd)\s*[:：=]\s*([^\s，,；;]+)", line, flags=re.IGNORECASE)
+                datas.extend(item.strip() for item in secret_matches)
+    return {"datas": unique_preserve_order(datas)[:10]}
+
+
 def build_answer(payload: Dict[str, Any], query: Dict[str, Any], evidence: List[Dict[str, Any]], logs: List[str] | None = None) -> Dict[str, Any]:
     logs = logs if logs is not None else []
     task_type = str(payload.get("task_type") or query.get("task_type") or "answer_from_context")
@@ -90,6 +119,10 @@ def build_answer(payload: Dict[str, Any], query: Dict[str, Any], evidence: List[
     intent = query.get("intent")
     if task_type == "answer_file_content_paths" or intent == "file_content_paths":
         answer = _build_path_answer(query, evidence)
+    elif task_type == "answer_environment_info" or intent == "environment_info":
+        answer = _build_environment_answer(query, evidence)
+        if answer.get("datas") == []:
+            answer = _build_text_answer(query, evidence)
     elif task_type == "answer_excel_summary" or intent == "excel_summary":
         table_first = sorted(evidence, key=lambda item: 0 if item.get("kind") == "table" else 1)
         answer = _build_text_answer(query, table_first)

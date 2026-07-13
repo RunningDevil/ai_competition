@@ -110,6 +110,7 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
     has_todo = "todo" in lower or "TODO" in title
     has_comment = any(word in title for word in ("批注", "注释", "待办"))
     is_count = any(word in title for word in ("统计", "数量", "多少", "几个"))
+    is_list_request = any(word in title for word in ("列表", "清单", "明细", "列出"))
     is_filter = bool(filters.get("assignee") or filters.get("end_date")) or any(word in title for word in ("责任人", "待", "日期"))
 
     if is_fix and (has_todo or has_comment or files):
@@ -117,7 +118,19 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
         classification.update(
             {
                 "category": "fix_annotation",
-                "task_type": "fix_todos" if family == "text_code" else "fix_comments",
+                "task_type": _annotation_task_type("fix", family),
+                "target_agent": family,
+                "candidate_strategy": "targeted_or_all",
+            }
+        )
+        return classification
+
+    if (has_todo or has_comment) and (is_filter or is_list_request):
+        family = _annotation_family(title, files, extensions, has_todo)
+        classification.update(
+            {
+                "category": "filter_annotation",
+                "task_type": _annotation_task_type("filter", family),
                 "target_agent": family,
                 "candidate_strategy": "targeted_or_all",
             }
@@ -129,7 +142,7 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
         classification.update(
             {
                 "category": "count_annotation",
-                "task_type": "count_todos" if family == "text_code" else "count_comments",
+                "task_type": _annotation_task_type("count", family),
                 "target_agent": family,
                 "candidate_strategy": "targeted_or_all",
             }
@@ -141,7 +154,7 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
         classification.update(
             {
                 "category": "filter_annotation",
-                "task_type": "filter_todos" if family == "text_code" else "filter_comments",
+                "task_type": _annotation_task_type("filter", family),
                 "target_agent": family,
                 "candidate_strategy": "targeted_or_all",
             }
@@ -149,7 +162,10 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
         return classification
 
     if any(word in title for word in ("环境", "密码", "账号", "用户", "端口", "地址")) or re.search(r"\d{1,3}(?:\.\d{1,3}){3}", title):
-        classification.update({"task_type": "answer_environment_info", "candidate_strategy": "recall"})
+        filters.setdefault("categories", ["02_环境信息"])
+        filters.setdefault("extensions", ["md"])
+        filters.setdefault("limit", 10)
+        classification.update({"task_type": "answer_environment_info", "candidate_strategy": "recall", "filters": filters})
     elif any(word in title for word in ("命令", "控制台", "连接", "如何", "怎么")):
         classification.update({"task_type": "answer_command_info", "candidate_strategy": "recall"})
     elif any(word in title for word in ("excel", "Excel", "表格", "透视", "sheet", "工作表")) or any(ext in {"xls", "xlsx"} for ext in extensions):
@@ -169,7 +185,15 @@ def _annotation_family(title: str, files: List[str], extensions: List[str], has_
     if ext_set & TEXT_CODE_EXTS:
         return "text_code"
     if has_todo:
-        return "text_code"
+        return "all"
     if any(word in title for word in ("word", "Word", "ppt", "PPT", "excel", "Excel", "办公")):
         return "office"
-    return "text_code"
+    return "all"
+
+
+def _annotation_task_type(action: str, family: str) -> str:
+    if family == "text_code":
+        return {"filter": "filter_todos", "count": "count_todos", "fix": "fix_todos"}[action]
+    if family == "office":
+        return {"filter": "filter_comments", "count": "count_comments", "fix": "fix_comments"}[action]
+    return {"filter": "filter_annotations", "count": "count_annotations", "fix": "fix_annotations"}[action]
