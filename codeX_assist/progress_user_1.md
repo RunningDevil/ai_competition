@@ -22,3 +22,4 @@
 - 2026-07-13：将 `office_document_skill/SKILL.md` 主体从英文改为中文，保持 `name: office-document-skill` 不变，并将 `description` 调整为中文为主、保留关键英文任务名和文件后缀的混合触发描述，以便与中文题面、Agent说明和团队协作文档风格统一。
 - 2026-07-13：在 `codeX_assist/plan.md` 中将办公文档Agent标记为“已完成（基础版）”，并注明当前已完成 subagent、Skill、requirements 和 scripts 骨架；真实 Office 文件 smoke test 需在安装依赖后继续补充。
 - 2026-07-13：在安装 Python 办公依赖后完成 `office_document_skill` 最小真实 Office smoke test：使用系统临时目录生成 `docx/pptx/xlsx` 样例，其中 `xlsx` 带结构化批注；调用 `office_agent_cli.py` 验证 `extract_text` 提取 6 条文本、`count_comments` 统计 1 条批注、`filter_comments` 按 `assignee=LiSi` 筛出 1 条批注、`provide_qa_context` 返回 6 条文本和 1 条批注，并生成 `office_document_agent.log` 与 `office_document_agent_result.jsonl`。测试样例未写入项目目录，已清理 `__pycache__`。
+- 2026-07-13：为 `work/skills/office_document_agent.md` 文件头部增加 subagent 元数据块，包含 `description` 和 `mode: subagent` 两个属性，便于主控或平台识别该文件为办公文档子Agent说明。
