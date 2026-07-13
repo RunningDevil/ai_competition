@@ -1,0 +1,2 @@
+# Main orchestrator uses Python standard library only.
+# Downstream Office processing dependencies are listed in office_document_skill/requirements.txt.
