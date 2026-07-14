@@ -1,0 +1,22 @@
+[
+    {"id":"group-1-1","title":"筛选docs/test_docs目录下所有Word、PPT、Excel和代码文件中，责任人为钱一的批注或TODO列表","level":"中等"},
+    {"id":"group-1-2","title":"筛选docs/test_docs目录下所有Word文件中，责任人为吴九的批注列表","level":"中等"},
+    {"id":"group-1-3","title":"筛选docs/test_docs目录下所有PPT文件中，end_date为20260825的批注列表","level":"中等"},
+    {"id":"group-1-4","title":"筛选docs/test_docs目录下所有Excel文件中，责任人为赵六且end_date在20260801到20260831之间的批注列表","level":"困难"},
+    {"id":"group-1-5","title":"筛选docs/test_docs目录下所有代码文件中，责任人为冯二的TODO列表","level":"中等"},
+    {"id":"group-1-6","title":"筛选docs/test_docs目录下所有Java和JavaScript文件中，end_date在20260901到20260930之间的TODO列表","level":"困难"},
+    {"id":"group-1-7","title":"筛选docs/test_docs目录下所有文件中，责任人为李四且end_date晚于20261201的批注或TODO列表","level":"困难"},
+    {"id":"group-1-8","title":"筛选docs/test_docs目录下所有文件中，end_date早于20260801的批注或TODO列表","level":"困难"},
+    {"id":"group-1-9","title":"筛选docs/test_docs目录下所有Markdown文件中，责任人为刘四的TODO列表","level":"中等"},
+    {"id":"group-1-10","title":"筛选docs/test_docs目录下所有文件中，责任人为客户运营组的批注或TODO列表，并输出所在文件名和截止日期","level":"困难"},
+    {"id":"group-1-11","title":"统计docs/test_docs目录下所有Word、PPT、Excel和代码文件中，责任人为刘四的批注或TODO数量","level":"中等"},
+    {"id":"group-1-12","title":"统计docs/test_docs目录下所有Word文件中，责任人为张三的批注数量","level":"中等"},
+    {"id":"group-1-13","title":"统计docs/test_docs目录下所有PPT文件中，责任人为王五的批注数量","level":"中等"},
+    {"id":"group-1-14","title":"统计docs/test_docs目录下所有Excel文件中，责任人为钱一的批注数量","level":"中等"},
+    {"id":"group-1-15","title":"统计docs/test_docs目录下所有代码文件中，责任人为冯二的TODO数量","level":"中等"},
+    {"id":"group-1-16","title":"统计docs/test_docs目录下所有文件中，end_date为20261231的批注或TODO数量","level":"中等"},
+    {"id":"group-1-17","title":"统计docs/test_docs目录下所有Java文件中，责任人为李四的TODO数量","level":"中等"},
+    {"id":"group-1-18","title":"统计docs/test_docs目录下所有文件中，责任人为客户运营组的批注或TODO数量","level":"中等"},
+    {"id":"group-1-19","title":"统计docs/test_docs目录下所有文件中，end_date在20260801到20260831之间的批注或TODO数量","level":"困难"},
+    {"id":"group-1-20","title":"统计docs/test_docs目录下所有文件中，各责任人的批注或TODO数量，并按数量从高到低排序","level":"困难"}
+]
