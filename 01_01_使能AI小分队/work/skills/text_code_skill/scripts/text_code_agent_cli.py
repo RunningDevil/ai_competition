@@ -55,6 +55,44 @@ def _load_payload(args: argparse.Namespace) -> Dict[str, Any]:
     raise ValueError("either --input-json or --input-file is required")
 
 
+def _filter_extensions(payload: Dict[str, Any]) -> set[str]:
+    filters = payload.get("filters") or {}
+    raw = filters.get("extensions") or []
+    if isinstance(raw, str):
+        raw = [raw]
+    if filters.get("extension"):
+        raw = list(raw) + [filters.get("extension")]
+    return {str(item).lower().lstrip(".") for item in raw if str(item or "").strip()}
+
+
+def _filter_path_scopes(payload: Dict[str, Any]) -> List[str]:
+    filters = payload.get("filters") or {}
+    raw = filters.get("path_scopes") or []
+    if isinstance(raw, str):
+        raw = [raw]
+    if filters.get("path_scope"):
+        raw = list(raw) + [filters.get("path_scope")]
+    result: List[str] = []
+    for item in raw:
+        text = str(item or "").replace("\\", "/").strip("/")
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def _candidate_allowed(path: Path, payload: Dict[str, Any]) -> bool:
+    allowed_exts = _filter_extensions(payload)
+    ext = get_extension(path)
+    if allowed_exts and ext not in allowed_exts:
+        return False
+    scopes = _filter_path_scopes(payload)
+    if scopes:
+        source_rel = rel_to_docs(path, payload.get("wiki_root") or "llm-wiki").strip("/")
+        if not any(source_rel == scope or source_rel.startswith(scope.rstrip("/") + "/") for scope in scopes):
+            return False
+    return True
+
+
 def _collect_candidates(payload: Dict[str, Any], logs: List[str]) -> List[Path]:
     wiki_root = payload.get("wiki_root") or "llm-wiki"
     paths: List[Path] = []
@@ -66,6 +104,9 @@ def _collect_candidates(payload: Dict[str, Any], logs: List[str]) -> List[Path]:
             continue
         if not path.exists():
             logs.append(f"Candidate does not exist: {path}")
+            continue
+        if not _candidate_allowed(path, payload):
+            logs.append(f"Skipped candidate by filters: {path}")
             continue
         paths.append(path)
     return paths

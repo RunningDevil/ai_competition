@@ -139,6 +139,17 @@ def filter_categories(payload: Dict[str, Any]) -> List[str]:
     return [normalize_text(item) for item in raw if normalize_text(item)]
 
 
+def filter_path_scopes(payload: Dict[str, Any]) -> List[str]:
+    filters = payload.get("filters") or {}
+    raw = filters.get("path_scopes") or []
+    if isinstance(raw, str):
+        raw = [raw]
+    if filters.get("path_scope"):
+        raw = list(raw) + [filters.get("path_scope")]
+    scopes = [normalize_path_text(item).strip("/") for item in raw if normalize_path_text(item)]
+    return unique_preserve_order(scopes)
+
+
 def filter_limit(payload: Dict[str, Any], default: int = 20) -> int:
     filters = payload.get("filters") or {}
     try:
@@ -152,13 +163,17 @@ def apply_metadata_filters(files: List[Dict[str, Any]], payload: Dict[str, Any])
     include_temp = filters_include_temp(payload)
     extensions = set(filter_extensions(payload))
     categories = set(filter_categories(payload))
+    path_scopes = filter_path_scopes(payload)
     result = []
     for item in files:
+        path = normalize_path_text(item.get("path")).strip("/")
         if not include_temp and item.get("is_temp"):
             continue
         if extensions and item.get("extension") not in extensions:
             continue
         if categories and item.get("category_dir") not in categories:
+            continue
+        if path_scopes and not any(path == scope or path.startswith(scope.rstrip("/") + "/") for scope in path_scopes):
             continue
         result.append(item)
     return result

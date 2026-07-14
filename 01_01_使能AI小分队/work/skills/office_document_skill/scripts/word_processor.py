@@ -28,7 +28,19 @@ W_T = f"{{{WORD_NS['w']}}}t"
 
 def _text_from_xml_element(element: ET.Element) -> str:
     parts = [node.text or "" for node in element.findall(".//w:t", WORD_NS)]
-    return "".join(parts).strip()
+    text = "".join(parts).strip()
+    if text:
+        return text
+    return "".join(part.strip() for part in element.itertext() if part and part.strip()).strip()
+
+
+def _local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+
+def _comment_elements(root: ET.Element) -> List[ET.Element]:
+    nodes = [node for node in root.iter() if _local_name(node.tag) in {"comment", "modernComment", "cm"}]
+    return nodes or [root]
 
 
 def _extract_docx_text(path: Path, source_rel: str) -> List[Dict[str, Any]]:
@@ -60,7 +72,7 @@ def _extract_docx_comments(path: Path, source_rel: str) -> List[Dict[str, Any]]:
         comment_files = [name for name in names if name.startswith("word/") and "comment" in name.lower() and name.endswith(".xml")]
         for comment_file in comment_files:
             root = ET.fromstring(package.read(comment_file))
-            for index, comment in enumerate(root.findall(".//w:comment", WORD_NS), start=1):
+            for index, comment in enumerate(_comment_elements(root), start=1):
                 text = _text_from_xml_element(comment)
                 if text:
                     comments.append(parse_comment_text(text, source_rel, "docx", f"{comment_file}:comment:{index}"))

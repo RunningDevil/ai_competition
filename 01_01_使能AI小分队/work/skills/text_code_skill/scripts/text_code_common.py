@@ -237,10 +237,12 @@ def _first_filter_date(filters: Dict[str, Any], keys: Iterable[str]) -> str:
     return ""
 
 
-def _date_bounds(filters: Dict[str, Any]) -> Tuple[str, str, str]:
+def _date_bounds(filters: Dict[str, Any]) -> Tuple[str, str, str, str, str]:
     exact = _first_filter_date(filters, ("end_date", "date"))
     gte = _first_filter_date(filters, ("end_date_gte", "date_gte", "end_date_min", "date_min", "start_date", "from_date"))
     lte = _first_filter_date(filters, ("end_date_lte", "date_lte", "end_date_max", "date_max", "end_date_before", "date_before", "until_date", "to_date"))
+    gt = _first_filter_date(filters, ("end_date_gt", "date_gt", "end_date_after_strict", "date_after_strict"))
+    lt = _first_filter_date(filters, ("end_date_lt", "date_lt", "end_date_before_strict", "date_before_strict"))
     date_range = filters.get("end_date_range") or filters.get("date_range")
     if isinstance(date_range, dict):
         gte = gte or _first_filter_date(date_range, ("start", "gte", "from", "min"))
@@ -253,10 +255,10 @@ def _date_bounds(filters: Dict[str, Any]) -> Tuple[str, str, str]:
                 first, second = second, first
             gte = gte or first
             lte = lte or second
-    return exact, gte, lte
+    return exact, gte, lte, gt, lt
 
 
-def _matches_date_filter(item_date: Any, exact: str, gte: str, lte: str) -> bool:
+def _matches_date_filter(item_date: Any, exact: str, gte: str, lte: str, gt: str, lt: str) -> bool:
     date = _normalize_date(item_date)
     if exact and date != exact:
         return False
@@ -264,15 +266,25 @@ def _matches_date_filter(item_date: Any, exact: str, gte: str, lte: str) -> bool
         return False
     if lte and (not date or date > lte):
         return False
+    if gt and (not date or date <= gt):
+        return False
+    if lt and (not date or date >= lt):
+        return False
     return True
 
 
 def filter_todos(todos: List[Dict[str, Any]], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
     assignee = normalize_text(filters.get("assignee") or filters.get("to"))
-    exact_date, end_date_gte, end_date_lte = _date_bounds(filters)
-    has_date_filter = bool(exact_date or end_date_gte or end_date_lte)
+    exact_date, end_date_gte, end_date_lte, end_date_gt, end_date_lt = _date_bounds(filters)
+    has_date_filter = bool(exact_date or end_date_gte or end_date_lte or end_date_gt or end_date_lt)
     file_name = normalize_text(filters.get("file_name"))
     extension = normalize_text(filters.get("extension")).lower().lstrip(".")
+    raw_exts = filters.get("extensions") or []
+    if isinstance(raw_exts, str):
+        raw_exts = [raw_exts]
+    extensions = {normalize_text(item).lower().lstrip(".") for item in raw_exts if normalize_text(item)}
+    if extension:
+        extensions.add(extension)
     keyword = normalize_text(filters.get("keyword"))
     structured = filters.get("structured")
     result = []
@@ -281,11 +293,11 @@ def filter_todos(todos: List[Dict[str, Any]], filters: Dict[str, Any]) -> List[D
             continue
         if assignee and assignee != normalize_text(item.get("to")):
             continue
-        if has_date_filter and not _matches_date_filter(item.get("end_date"), exact_date, end_date_gte, end_date_lte):
+        if has_date_filter and not _matches_date_filter(item.get("end_date"), exact_date, end_date_gte, end_date_lte, end_date_gt, end_date_lt):
             continue
         if file_name and file_name not in normalize_text(item.get("source")):
             continue
-        if extension and extension != normalize_text(item.get("file_type")).lower():
+        if extensions and normalize_text(item.get("file_type")).lower().lstrip(".") not in extensions:
             continue
         if structured is not None and bool(item.get("structured")) != bool(structured):
             continue

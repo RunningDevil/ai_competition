@@ -16,6 +16,7 @@ from orchestrator_common import (
     OFFICE_EXTS,
     TEXT_CODE_EXTS,
     append_jsonl,
+    candidate_extension,
     candidate_path,
     ensure_dir,
     make_question_log,
@@ -26,6 +27,7 @@ from orchestrator_common import (
     split_candidates,
     timestamp,
     unique_preserve_order,
+    write_json_file,
 )
 from question_classifier import classify_question
 from question_loader import derive_output_file, load_questions, write_answers
@@ -82,6 +84,8 @@ class MainOrchestrator:
             return self._run_file_index_task(question, "count_by_type", classification)
         if category == "find_path":
             return self._run_file_index_task(question, "find_path", classification)
+        if category == "aggregate_annotation":
+            return self._run_annotation_aggregation_task(question, classification)
         if category in {"filter_annotation", "count_annotation", "fix_annotation"}:
             return self._run_annotation_task(question, classification)
         return self._run_knowledge_task(question, classification)
@@ -242,13 +246,61 @@ class MainOrchestrator:
                     return merged
         return merged
 
+    def _filter_candidates_by_constraints(
+        self,
+        candidates: List[Dict[str, Any]],
+        classification: Dict[str, Any],
+        family: str | None = None,
+    ) -> List[Dict[str, Any]]:
+        filters = classification.get("filters") or {}
+        allowed_exts = {
+            str(ext).lower().lstrip(".")
+            for ext in (filters.get("extensions") or [])
+            if str(ext or "").strip()
+        }
+        if filters.get("extension"):
+            allowed_exts.add(str(filters.get("extension")).lower().lstrip("."))
+        if family == "office":
+            allowed_exts = (allowed_exts & OFFICE_EXTS) if allowed_exts else set(OFFICE_EXTS)
+        elif family == "text_code":
+            allowed_exts = (allowed_exts & TEXT_CODE_EXTS) if allowed_exts else set(TEXT_CODE_EXTS)
+
+        scopes = filters.get("path_scopes") or []
+        if filters.get("path_scope"):
+            scopes = list(scopes) + [filters.get("path_scope")]
+        normalized_scopes = []
+        for scope in scopes:
+            text = str(scope or "").replace("\\", "/").strip("/")
+            if text:
+                normalized_scopes.append(text)
+        normalized_scopes = unique_preserve_order(normalized_scopes)
+
+        result: List[Dict[str, Any]] = []
+        for item in candidates or []:
+            if not isinstance(item, dict):
+                continue
+            path = candidate_path(item)
+            if not path:
+                continue
+            normalized_path = path.replace("\\", "/").strip("/")
+            ext = candidate_extension(item)
+            if allowed_exts and ext not in allowed_exts:
+                continue
+            if normalized_scopes and not any(
+                normalized_path == scope or normalized_path.startswith(scope.rstrip("/") + "/")
+                for scope in normalized_scopes
+            ):
+                continue
+            result.append(item)
+        return result
+
     def _candidate_pool(self, question: Dict[str, Any], classification: Dict[str, Any], family: str | None = None) -> List[Dict[str, Any]]:
         candidates = self._recall_candidates(question, classification)
         if classification.get("candidate_strategy") == "targeted_or_all":
             files_in_question = classification.get("files") or []
             if not files_in_question or len(candidates) < 1:
                 candidates = self._all_candidates_by_family(question, family or str(classification.get("target_agent") or "text_code"))
-        return candidates
+        return self._filter_candidates_by_constraints(candidates, classification, family)
 
     def _expand_knowledge_candidates(self, question: Dict[str, Any], classification: Dict[str, Any], candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         limit = self._knowledge_candidate_limit(classification)
@@ -260,6 +312,8 @@ class MainOrchestrator:
             ext = str(item.get("extension") or item.get("file_type") or "").lower().lstrip(".")
             if ext in parseable_exts:
                 broad_candidates.append(item)
+        candidates = self._filter_candidates_by_constraints(candidates, classification)
+        broad_candidates = self._filter_candidates_by_constraints(broad_candidates, classification)
         priority_candidates: List[Dict[str, Any]] = []
         if str(classification.get("task_type") or "") == "answer_command_info":
             priority_candidates = sorted(
@@ -428,6 +482,7 @@ class MainOrchestrator:
         candidates = self._candidate_pool(question, classification, family)
         split = split_candidates(candidates)
         selected = split["office"] if family == "office" else split["text_code"]
+        selected = self._filter_candidates_by_constraints(selected, classification, family)
         if not selected:
             return {"datas": []}
         denied_answer = self._check_candidate_resources(question, selected)
@@ -479,6 +534,88 @@ class MainOrchestrator:
             if isinstance(values, list):
                 datas.extend(str(item) for item in values if item is not None)
         return {"datas": unique_preserve_order(datas)}
+
+    def _answer_file_for_question(self, question: Dict[str, Any]) -> str:
+        qid = str(question.get("id") or "")
+        match = re.match(r"(group-\d+)-\d+$", qid)
+        group_name = match.group(1) if match else "group-unknown"
+        return path_for_payload(self.output_root / f"{group_name}-answer.md")
+
+    def _safe_name(self, value: Any) -> str:
+        return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value or "unknown")).strip("_") or "unknown"
+
+    def _extract_annotations_for_aggregation(
+        self,
+        question: Dict[str, Any],
+        classification: Dict[str, Any],
+        family: str,
+    ) -> List[Dict[str, Any]]:
+        candidates = self._candidate_pool(question, classification, family)
+        split = split_candidates(candidates)
+        selected = split["office"] if family == "office" else split["text_code"]
+        selected = self._filter_candidates_by_constraints(selected, classification, family)
+        if not selected:
+            return []
+        denied_answer = self._check_candidate_resources(question, selected)
+        if denied_answer:
+            return []
+        skill_name = "office_document_skill" if family == "office" else "text_code_skill"
+        script_name = "office_agent_cli.py" if family == "office" else "text_code_agent_cli.py"
+        task_type = "extract_comments" if family == "office" else "extract_todos"
+        payload = self._base_payload(question, task_type)
+        payload["candidate_files"] = selected
+        payload["filters"] = classification.get("filters") or {}
+        result = self.runner.run_cli(
+            f"{question['id']}_{family}_{task_type}_for_aggregation",
+            self.runner.script_path(skill_name, script_name),
+            payload,
+            timeout=600,
+        )
+        items = result.get("comments") if family == "office" else result.get("todos")
+        return [item for item in (items or []) if isinstance(item, dict)]
+
+    def _run_annotation_aggregation_task(self, question: Dict[str, Any], classification: Dict[str, Any]) -> Dict[str, Any]:
+        family = str(classification.get("target_agent") or "all")
+        families = ["office", "text_code"] if family == "all" else [family]
+        annotations: List[Dict[str, Any]] = []
+        candidate_paths: List[str] = []
+        for current_family in families:
+            family_annotations = self._extract_annotations_for_aggregation(question, classification, current_family)
+            annotations.extend(family_annotations)
+            candidate_paths.extend(str(item.get("source") or "") for item in family_annotations if item.get("source"))
+
+        task_dir = self.run_log_dir / "annotation_aggregation_tasks"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        task_path = task_dir / f"{self._safe_name(question.get('id'))}_aggregate_annotations.json"
+        task = {
+            "status": "pending_model_annotation_aggregation",
+            "task_kind": "annotation_assignee_count_aggregation",
+            "question_id": question.get("id"),
+            "question_title": question.get("title"),
+            "filters": classification.get("filters") or {},
+            "candidate_files": unique_preserve_order(candidate_paths),
+            "annotations": annotations,
+            "answer_file": self._answer_file_for_question(question),
+            "aggregation_contract": {
+                "use_model_judgement": True,
+                "count_only_structured": True,
+                "group_field": "to",
+                "sort_by_question": True,
+                "answer_format": {"datas": ["责任人: 数量"]},
+                "must_update_answer_file_on_success": True,
+            },
+        }
+        write_json_file(task_path, task)
+        append_jsonl(
+            self.run_log_dir / "main_orchestrator_agent.log",
+            make_question_log(
+                str(question.get("id") or ""),
+                "annotation_aggregation_task_written",
+                task_path=path_for_payload(task_path),
+                annotation_count=len(annotations),
+            ),
+        )
+        return {"datas": []}
 
     def _run_knowledge_task(self, question: Dict[str, Any], classification: Dict[str, Any]) -> Dict[str, Any]:
         candidates = self._candidate_pool(question, classification)

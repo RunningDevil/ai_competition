@@ -6,8 +6,8 @@ from typing import Any, Dict
 
 
 FIELD_PATTERNS = {
-    "todo": re.compile(r"\btodo\b\s*[:：]\s*(.*?)(?=(?:[,，;；]\s*)?\bto\b\s*[:：]|$)", re.IGNORECASE | re.DOTALL),
-    "to": re.compile(r"\bto\b\s*[:：]\s*(.*?)(?=(?:[,，;；]\s*)?\bend_date\b\s*[:：]|$)", re.IGNORECASE | re.DOTALL),
+    "todo": re.compile(r"\btodo\b\s*[:：]\s*(.*?)(?=(?:[?？,，;；\n\r]\s*)?\bto\b\s*[:：]|$)", re.IGNORECASE | re.DOTALL),
+    "to": re.compile(r"\bto\b\s*[:：]\s*(.*?)(?=(?:[?？,，;；\n\r]\s*)?\bend_date\b\s*[:：]|$)", re.IGNORECASE | re.DOTALL),
     "end_date": re.compile(r"\bend_date\b\s*[:：]\s*(\d{8})", re.IGNORECASE),
 }
 
@@ -31,7 +31,7 @@ def clean_comment_text(text: str) -> str:
 
 
 def _clean_field(value: str) -> str:
-    return (value or "").strip(" \t\r\n,，;；")
+    return (value or "").strip(" \t\r\n?？,，;；")
 
 
 def parse_structured_todo(raw_text: str) -> Dict[str, Any]:

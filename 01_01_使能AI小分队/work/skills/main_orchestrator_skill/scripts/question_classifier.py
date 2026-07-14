@@ -13,6 +13,7 @@ FILE_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
+PATH_SCOPE_RE = re.compile(r"(docs/[^\s，,。；;]+?)(?:目录|文件夹|下|中|里|内)", re.IGNORECASE)
 
 COUNT_WORDS = (
     "数量",
@@ -34,8 +35,12 @@ COUNT_WORDS = (
 
 EXTENSION_ALIASES = [
     (("word", "Word", "WORD", "Word文档", "word文档", "文字文档"), ["doc", "docx"]),
-    (("powerpoint", "PowerPoint", "PPTX", "演示文稿", "幻灯片"), ["ppt", "pptx"]),
+    (("powerpoint", "PowerPoint", "ppt", "PPT", "PPTX", "演示文稿", "幻灯片"), ["ppt", "pptx"]),
     (("excel", "Excel", "EXCEL", "电子表格", "工作簿"), ["xls", "xlsx"]),
+    (("markdown", "Markdown", "md文件", "MD文件"), ["md"]),
+    (("javascript", "JavaScript", "js文件", "JS文件"), ["js"]),
+    (("java文件", "Java文件"), ["java"]),
+    (("python", "Python", "py文件", "PY文件"), ["py"]),
 ]
 
 
@@ -43,11 +48,13 @@ def _extract_extensions(title: str) -> List[str]:
     lower = title.lower()
     result: List[str] = []
     for ext in sorted(COUNTABLE_EXTS, key=len, reverse=True):
-        if re.search(rf"(?<![a-z0-9])\.?{re.escape(ext)}(文件|文档|数量|总数|$|[\s，,。；;])", lower):
+        if re.search(rf"(?<![a-z0-9])\.?{re.escape(ext)}(?![a-z0-9])", lower):
             result.append(ext)
     for aliases, mapped_exts in EXTENSION_ALIASES:
         if any(alias.lower() in lower for alias in aliases):
             result.extend(mapped_exts)
+    if "代码文件" in title or "代码类文件" in title:
+        result.extend(sorted(TEXT_CODE_EXTS))
     return unique_preserve_order(result)
 
 
@@ -55,9 +62,18 @@ def _extract_file_names(title: str) -> List[str]:
     return unique_preserve_order(match.group(0).replace("\\", "/") for match in FILE_RE.finditer(title))
 
 
+def _extract_path_scopes(title: str) -> List[str]:
+    scopes: List[str] = []
+    for match in PATH_SCOPE_RE.finditer(title):
+        scope = match.group(1).replace("\\", "/").strip(" /，,。；;")
+        if scope and "." not in scope.rsplit("/", 1)[-1]:
+            scopes.append(scope)
+    return unique_preserve_order(scopes)
+
+
 def _extract_assignee(title: str) -> str:
     patterns = [
-        r"责任人为\s*([^\s，,。；;的]+)",
+        r"责任人为\s*([^\s，,。；;的且并和及、]+)",
         r"待\s*([^\s，,。；;]+?)\s*处理",
         r"to\s*[:：]\s*([^\s，,。；;]+)",
     ]
@@ -83,6 +99,10 @@ def _extract_date_filters(title: str) -> Dict[str, Any]:
     match = date_matches[0]
     before_text = title[max(0, match.start() - 10) : match.start()]
     after_text = title[match.end() : match.end() + 10]
+    if "早于" in before_text:
+        return {"end_date_lt": date}
+    if "晚于" in before_text:
+        return {"end_date_gt": date}
     if any(word in after_text for word in ("之前", "以前", "及之前", "及以前", "当天及之前", "前")) or any(
         word in before_text for word in ("不晚于", "截至", "截止", "截止到")
     ):
@@ -104,6 +124,10 @@ def _base_filters(title: str) -> Dict[str, Any]:
     files = _extract_file_names(title)
     if files:
         filters["file_name"] = files[0]
+    path_scopes = _extract_path_scopes(title)
+    if path_scopes:
+        filters["path_scopes"] = path_scopes
+        filters["path_scope"] = path_scopes[0]
     exts = _extract_extensions(title)
     if exts:
         filters["extensions"] = exts
@@ -113,6 +137,8 @@ def _base_filters(title: str) -> Dict[str, Any]:
 
 
 def _is_file_count_question(title: str, extensions: List[str]) -> bool:
+    if any(word in title for word in ("批注", "注释", "待办", "TODO", "todo")):
+        return False
     if extensions and any(word in title for word in COUNT_WORDS):
         return True
     if any(word in title for word in ("文件数量", "文档数量", "资料数量", "文件总数", "文档总数")):
@@ -144,6 +170,14 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
         "notes": [],
     }
 
+    is_fix = any(word in title for word in ("修复", "修改", "改成", "优化整理")) or re.search(r"完成.*描述的工作", title)
+    has_todo = "todo" in lower or "TODO" in title
+    has_comment = any(word in title for word in ("批注", "注释", "待办"))
+    is_count = any(word in title for word in ("统计", "数量", "多少", "几个"))
+    is_list_request = any(word in title for word in ("列表", "清单", "明细", "列出"))
+    has_date_filter = any(filters.get(key) for key in ("end_date", "end_date_lte", "end_date_gte", "end_date_lt", "end_date_gt", "end_date_range"))
+    is_filter = bool(filters.get("assignee") or has_date_filter) or any(word in title for word in ("责任人", "待", "日期", "之前", "以后", "早于", "晚于", "区间", "范围"))
+
     if _is_file_count_question(title, extensions):
         classification.update(
             {
@@ -166,14 +200,6 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
         )
         return classification
 
-    is_fix = any(word in title for word in ("修复", "修改", "改成", "优化整理")) or re.search(r"完成.*描述的工作", title)
-    has_todo = "todo" in lower or "TODO" in title
-    has_comment = any(word in title for word in ("批注", "注释", "待办"))
-    is_count = any(word in title for word in ("统计", "数量", "多少", "几个"))
-    is_list_request = any(word in title for word in ("列表", "清单", "明细", "列出"))
-    has_date_filter = any(filters.get(key) for key in ("end_date", "end_date_lte", "end_date_gte", "end_date_range"))
-    is_filter = bool(filters.get("assignee") or has_date_filter) or any(word in title for word in ("责任人", "待", "日期", "之前", "以后", "区间", "范围"))
-
     if is_fix and (has_todo or has_comment or files):
         family = _annotation_family(title, files, extensions, has_todo)
         classification.update(
@@ -186,12 +212,12 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
         )
         return classification
 
-    if (has_todo or has_comment) and (is_filter or is_list_request):
+    if (has_todo or has_comment) and is_count and any(word in title for word in ("各责任人", "每个责任人", "不同责任人")):
         family = _annotation_family(title, files, extensions, has_todo)
         classification.update(
             {
-                "category": "filter_annotation",
-                "task_type": _annotation_task_type("filter", family),
+                "category": "aggregate_annotation",
+                "task_type": "aggregate_annotations",
                 "target_agent": family,
                 "candidate_strategy": "targeted_or_all",
             }
@@ -204,6 +230,18 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "category": "count_annotation",
                 "task_type": _annotation_task_type("count", family),
+                "target_agent": family,
+                "candidate_strategy": "targeted_or_all",
+            }
+        )
+        return classification
+
+    if (has_todo or has_comment) and (is_filter or is_list_request):
+        family = _annotation_family(title, files, extensions, has_todo)
+        classification.update(
+            {
+                "category": "filter_annotation",
+                "task_type": _annotation_task_type("filter", family),
                 "target_agent": family,
                 "candidate_strategy": "targeted_or_all",
             }
@@ -241,13 +279,21 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
 def _annotation_family(title: str, files: List[str], extensions: List[str], has_todo: bool) -> str:
     file_exts = {file_name.rsplit(".", 1)[-1].lower() for file_name in files if "." in file_name}
     ext_set = set(extensions) | file_exts
-    if ext_set & OFFICE_EXTS:
+    has_office_ext = bool(ext_set & OFFICE_EXTS)
+    has_text_code_ext = bool(ext_set & TEXT_CODE_EXTS)
+    mentions_office = any(word in title for word in ("word", "Word", "ppt", "PPT", "excel", "Excel", "办公", "Word", "PPT", "Excel"))
+    mentions_code = any(word in title for word in ("代码", "java", "Java", "js", "JS", "javascript", "JavaScript", "py", "Python", "html", "HTML", "xml", "XML", "md", "Markdown"))
+    if (has_office_ext and has_text_code_ext) or (mentions_office and mentions_code):
+        return "all"
+    if has_office_ext:
         return "office"
-    if ext_set & TEXT_CODE_EXTS:
+    if has_text_code_ext:
+        return "text_code"
+    if mentions_code and not mentions_office:
         return "text_code"
     if has_todo:
         return "all"
-    if any(word in title for word in ("word", "Word", "ppt", "PPT", "excel", "Excel", "办公")):
+    if mentions_office:
         return "office"
     return "all"
 

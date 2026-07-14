@@ -121,7 +121,12 @@ def _comment_part_names(package: zipfile.ZipFile) -> List[str]:
         lowered = name.lower()
         if not lowered.endswith(".xml"):
             continue
-        if lowered.startswith("ppt/comments/comment") or lowered.startswith("ppt/threadedcomments/threadedcomment"):
+        if (
+            lowered.startswith("ppt/comments/comment")
+            or lowered.startswith("ppt/comments/moderncomment")
+            or lowered.startswith("ppt/moderncomments/moderncomment")
+            or lowered.startswith("ppt/threadedcomments/threadedcomment")
+        ):
             names.append(name)
     return sorted(names)
 
