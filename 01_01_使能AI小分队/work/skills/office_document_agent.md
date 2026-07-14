@@ -1,5 +1,5 @@
 ---
-description: 处理 LLM-WIKI 赛题中的 Word、PPT、Excel 办公文档任务，包括正文提取、批注提取与筛选、批注修复、Excel 表格分析，以及为知识问答Agent提供办公文档上下文。
+description: 处理 LLM-WIKI 赛题中的 Word、PPT、Excel 办公文档任务，包括正文提取、批注提取与筛选、批注修复、Excel 表格分析与基础透视图生成，以及为知识问答Agent提供办公文档上下文。
 mode: subagent
 ---
 
@@ -19,7 +19,7 @@ mode: subagent
 4. 自由批注保留和整理
 5. 批注统计与筛选
 6. 按批注要求修复办公文件
-7. Excel 表格读取、简单聚合、透视类分析
+7. Excel 表格读取、简单聚合、透视类分析，并在需要时生成 `output/fixed/*_pivot.xlsx`
 8. 为知识问答Agent提供办公文档文本块和元数据
 
 ## 可调用 Skill
@@ -95,6 +95,20 @@ work/skills/office_document_skill/
 {"datas": ["todo: xxx, to: 张三,end_date: 20251231"]}
 ```
 
+Excel 透视图类任务返回：
+
+```json
+{
+  "status": "ok",
+  "answer": {
+    "source": "docs/xxx.xlsx",
+    "target": "output/fixed/xxx_pivot.xlsx"
+  },
+  "fixed_files": ["output/fixed/xxx_pivot.xlsx"],
+  "logs": []
+}
+```
+
 ## 处理流程
 
 1. 检查 `safety.resource_checked`，未通过则拒绝读写文件。
@@ -103,7 +117,8 @@ work/skills/office_document_skill/
 4. 将批注统一为 `source/file_type/location/raw_text/structured/todo/to/end_date` 模型。
 5. 按责任人、日期、文件名、文件类型筛选或统计。
 6. 修复类任务输出到 `llm-wiki/output/fixed/`，保留原始相对目录结构。
-7. 写入本 Agent 日志和中间结果到 `run_log_dir`。
+7. Excel 透视图类任务生成包含透视汇总表和图表的 `.xlsx` 文件；这是聚合表和图表工作簿，不承诺创建 Excel 原生 PivotTable 对象。
+8. 写入本 Agent 日志和中间结果到 `run_log_dir`。
 
 ## 老格式文件策略
 

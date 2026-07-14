@@ -9,10 +9,34 @@ from orchestrator_common import COUNTABLE_EXTS, OFFICE_EXTS, TEXT_CODE_EXTS, nor
 
 FILE_RE = re.compile(
     r"[\w\-\u4e00-\u9fff（）()【】\[\].]+\.("
-    r"doc|docx|ppt|pptx|xls|xlsx|xml|java|py|html|md|js|txt|csv|json|yaml|yml|properties|env|conf|cfg|ini|log|sh|cmd"
+    r"doc|docx|ppt|pptx|xls|xlsx|xml|java|py|html|md|js|txt|csv|json|yaml|yml|properties|env|conf|cfg|ini|log|sh|cmd|sql|pdf"
     r")",
     re.IGNORECASE,
 )
+
+COUNT_WORDS = (
+    "数量",
+    "总数量",
+    "总数",
+    "多少",
+    "几个",
+    "几份",
+    "多少个",
+    "多少份",
+    "共有",
+    "一共",
+    "总共",
+    "合计",
+    "总计",
+    "分别有多少",
+    "各有多少",
+)
+
+EXTENSION_ALIASES = [
+    (("word", "Word", "WORD", "Word文档", "word文档", "文字文档"), ["doc", "docx"]),
+    (("powerpoint", "PowerPoint", "PPTX", "演示文稿", "幻灯片"), ["ppt", "pptx"]),
+    (("excel", "Excel", "EXCEL", "电子表格", "工作簿"), ["xls", "xlsx"]),
+]
 
 
 def _extract_extensions(title: str) -> List[str]:
@@ -21,6 +45,9 @@ def _extract_extensions(title: str) -> List[str]:
     for ext in sorted(COUNTABLE_EXTS, key=len, reverse=True):
         if re.search(rf"(?<![a-z0-9])\.?{re.escape(ext)}(文件|文档|数量|总数|$|[\s，,。；;])", lower):
             result.append(ext)
+    for aliases, mapped_exts in EXTENSION_ALIASES:
+        if any(alias.lower() in lower for alias in aliases):
+            result.extend(mapped_exts)
     return unique_preserve_order(result)
 
 
@@ -41,9 +68,30 @@ def _extract_assignee(title: str) -> str:
     return ""
 
 
-def _extract_end_date(title: str) -> str:
-    match = re.search(r"(20\d{6})", title)
-    return match.group(1) if match else ""
+def _extract_date_filters(title: str) -> Dict[str, Any]:
+    date_matches = list(re.finditer(r"(20\d{6})", title))
+    dates = [match.group(1) for match in date_matches]
+    if not dates:
+        return {}
+    if len(dates) >= 2:
+        start, end = dates[0], dates[1]
+        if start > end:
+            start, end = end, start
+        return {"end_date_gte": start, "end_date_lte": end, "end_date_range": [start, end]}
+
+    date = dates[0]
+    match = date_matches[0]
+    before_text = title[max(0, match.start() - 10) : match.start()]
+    after_text = title[match.end() : match.end() + 10]
+    if any(word in after_text for word in ("之前", "以前", "及之前", "及以前", "当天及之前", "前")) or any(
+        word in before_text for word in ("不晚于", "截至", "截止", "截止到")
+    ):
+        return {"end_date_lte": date}
+    if any(word in after_text for word in ("之后", "以后", "及之后", "及以后", "当天及之后", "起", "以来")) or any(
+        word in before_text for word in ("不早于", "从", "自")
+    ):
+        return {"end_date_gte": date}
+    return {"end_date": date}
 
 
 def _base_filters(title: str) -> Dict[str, Any]:
@@ -52,9 +100,7 @@ def _base_filters(title: str) -> Dict[str, Any]:
     if assignee:
         filters["assignee"] = assignee
         filters["to"] = assignee
-    end_date = _extract_end_date(title)
-    if end_date:
-        filters["end_date"] = end_date
+    filters.update(_extract_date_filters(title))
     files = _extract_file_names(title)
     if files:
         filters["file_name"] = files[0]
@@ -64,6 +110,20 @@ def _base_filters(title: str) -> Dict[str, Any]:
         if len(exts) == 1:
             filters["extension"] = exts[0]
     return filters
+
+
+def _is_file_count_question(title: str, extensions: List[str]) -> bool:
+    if extensions and any(word in title for word in COUNT_WORDS):
+        return True
+    if any(word in title for word in ("文件数量", "文档数量", "资料数量", "文件总数", "文档总数")):
+        return True
+    if re.search(r"(项目|知识库|docs|目录|文件夹).{0,12}(共有|一共|总共|合计|总计|有).{0,12}(多少|几).{0,4}(文件|文档|资料|个|份)", title, flags=re.IGNORECASE):
+        return True
+    if re.search(r"(文件|文档|资料).{0,6}(共有|一共|总共|合计|总计|有).{0,8}(多少|几).{0,4}(个|份)?", title):
+        return True
+    if re.search(r"(多少|几).{0,4}(个|份)?(文件|文档|资料)", title):
+        return True
+    return False
 
 
 def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
@@ -84,7 +144,7 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
         "notes": [],
     }
 
-    if extensions and any(word in title for word in ("数量", "总数量", "总数", "多少", "几个")):
+    if _is_file_count_question(title, extensions):
         classification.update(
             {
                 "category": "file_count",
@@ -111,7 +171,8 @@ def classify_question(question: Dict[str, Any]) -> Dict[str, Any]:
     has_comment = any(word in title for word in ("批注", "注释", "待办"))
     is_count = any(word in title for word in ("统计", "数量", "多少", "几个"))
     is_list_request = any(word in title for word in ("列表", "清单", "明细", "列出"))
-    is_filter = bool(filters.get("assignee") or filters.get("end_date")) or any(word in title for word in ("责任人", "待", "日期"))
+    has_date_filter = any(filters.get(key) for key in ("end_date", "end_date_lte", "end_date_gte", "end_date_range"))
+    is_filter = bool(filters.get("assignee") or has_date_filter) or any(word in title for word in ("责任人", "待", "日期", "之前", "以后", "区间", "范围"))
 
     if is_fix and (has_todo or has_comment or files):
         family = _annotation_family(title, files, extensions, has_todo)

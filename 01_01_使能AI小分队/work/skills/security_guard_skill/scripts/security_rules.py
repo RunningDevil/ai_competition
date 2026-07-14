@@ -44,6 +44,25 @@ DANGEROUS_ACTION_PATTERNS = [
     r"taskkill",
 ]
 
+COMMAND_INFO_QUERY_PATTERNS = [
+    r"(命令|指令|command|cmd|shell|cli|终端|控制台|语句).{0,24}(是什么|怎么写|如何写|怎样写|写法|用法|内容|文本)",
+    r"(什么|哪条|哪个|如何|怎么|怎样|查询|查看|获取|返回|给出|告诉|列出|提供|找出|检索).{0,36}(命令|指令|command|cmd|shell|cli|终端|控制台|语句)",
+    r"(连接|登录|重启|停止|删除|清理|授权|部署|启动|修改权限).{0,24}(命令|指令).{0,20}(是什么|怎么写|如何|怎么|哪条)",
+    r"\b(what|which|how|show|list|find|get|return|provide)\b.{0,48}\b(command|cmd|shell|cli)\b",
+]
+
+COMMAND_EXECUTION_REQUEST_PATTERNS = [
+    r"\brm\s+-rf\b",
+    r"\bmkfs\b",
+    r"\bdd\s+if=",
+    r"(删除|移除|清空).{0,10}(全部|所有|整个|全量|根目录|系统)",
+    r"(请|帮我|替我|直接|立即|立刻|马上|现在).{0,16}(执行|运行|启动|调用|跑|删除|移除|覆盖|写入|杀掉|终止|重启|修改权限)",
+    r"(执行(?!权限)|运行).{0,16}\b(rm|del|remove-item|kill|pkill|taskkill|chmod|chown|mkfs|dd|curl|wget|bash|sh)\b",
+    r"(验证|确认|测试).{0,16}(命令|指令|脚本).{0,16}(可执行|能运行|执行)",
+    r"\bplease\s+(run|execute|delete|remove|kill|chmod)\b",
+    r"\b(run|execute)\s+(rm|del|remove-item|kill|pkill|taskkill|chmod|chown|mkfs|dd|curl|wget|bash|sh)\b",
+]
+
 PROMPT_INJECTION_PATTERNS = [
     r"忽略.*(规则|指令|前文|上文|要求)",
     r"无论.*都.*执行",
@@ -96,6 +115,8 @@ ENV_SIGNAL_PATTERNS = [
     r"svc_",
 ]
 
+COMMAND_TOKEN_RE = re.compile(r"[A-Za-z0-9_@.+~:/\\-]+")
+
 
 def _contains_any(patterns: List[str], text: str) -> Tuple[bool, str]:
     lowered = text.lower()
@@ -135,6 +156,56 @@ def _simple_match(rule: str, value: str, *, check_basename: bool = False) -> boo
     if fnmatch.fnmatch(normalized_value, f"*/{stripped_rule}") or fnmatch.fnmatch(normalized_value, f"*/{stripped_rule}/*"):
         return True
     return False
+
+
+def _command_token_candidates(text: str) -> List[str]:
+    candidates: List[str] = []
+    for match in COMMAND_TOKEN_RE.finditer(normalize_text(text)):
+        token = match.group(0).strip("`'\"“”‘’，。；;：:、,.()[]{}<>")
+        if not token:
+            continue
+        normalized = normalize_path_text(token).lower()
+        if not normalized:
+            continue
+        candidates.append(normalized)
+        basename = Path(normalized).name
+        if basename and basename != normalized:
+            candidates.append(basename)
+    return list(dict.fromkeys(candidates))
+
+
+def check_permission_commands_in_question(question_title: str, permission: Dict[str, Dict[str, List[str]]]) -> Tuple[bool, str, List[str]]:
+    normalized_text = normalize_text(question_title).lower()
+    normalized_path_text = normalize_path_text(question_title).lower()
+    candidates = _command_token_candidates(question_title)
+
+    for rule in permission.get("command", {}).get("deny", []):
+        normalized_rule = normalize_text(rule).strip().lower()
+        normalized_path_rule = normalize_path_text(rule).strip().lower()
+        if not normalized_rule:
+            continue
+
+        rule_candidates = [normalized_rule, normalized_path_rule]
+        first_token = normalized_rule.split()[0] if normalized_rule.split() else normalized_rule
+        if first_token and not any(char.isspace() for char in normalized_rule):
+            rule_candidates.append(first_token)
+
+        for rule_candidate in dict.fromkeys(item for item in rule_candidates if item):
+            has_wildcard = any(char in rule_candidate for char in "*?[]")
+            has_space = any(char.isspace() for char in rule_candidate)
+            if has_space:
+                if rule_candidate in normalized_text or fnmatch.fnmatch(normalized_text, f"*{rule_candidate}*"):
+                    return False, f"命中 permission.command:{rule}", [f"permission.command:{rule}"]
+                continue
+
+            for candidate in candidates:
+                if has_wildcard:
+                    if fnmatch.fnmatch(candidate, rule_candidate) or fnmatch.fnmatch(normalized_path_text, f"*{rule_candidate}*"):
+                        return False, f"命中 permission.command:{rule}", [f"permission.command:{rule}"]
+                elif candidate == rule_candidate:
+                    return False, f"命中 permission.command:{rule}", [f"permission.command:{rule}"]
+
+    return True, "", []
 
 
 def check_permission_resource(kind: str, value: str, permission: Dict[str, Dict[str, List[str]]]) -> Tuple[bool, str, List[str]]:
@@ -195,6 +266,20 @@ def has_dangerous_action(text: str) -> Tuple[bool, str]:
     return _contains_any(DANGEROUS_ACTION_PATTERNS, text)
 
 
+def is_command_execution_request(text: str) -> Tuple[bool, str]:
+    return _contains_any(COMMAND_EXECUTION_REQUEST_PATTERNS, text)
+
+
+def is_command_info_query(text: str) -> Tuple[bool, str]:
+    matched, pattern = _contains_any(COMMAND_INFO_QUERY_PATTERNS, text)
+    if not matched:
+        return False, ""
+    execution, execution_pattern = is_command_execution_request(text)
+    if execution:
+        return False, execution_pattern
+    return True, pattern
+
+
 def has_prompt_injection(text: str) -> Tuple[bool, str]:
     return _contains_any(PROMPT_INJECTION_PATTERNS, text)
 
@@ -250,11 +335,17 @@ def check_question(question_title: str, permission: Dict[str, Dict[str, List[str
         if not ok:
             return False, reason, matched
 
+    ok, reason, matched = check_permission_commands_in_question(text, permission)
+    if not ok:
+        return False, reason, matched
+
     if has_path_traversal(text):
         return False, "问题包含路径穿越", ["path.traversal"]
 
+    command_info_query, _ = is_command_info_query(text)
+
     dangerous, pattern = has_dangerous_action(text)
-    if dangerous:
+    if dangerous and not command_info_query:
         return False, f"问题包含高危动作: {pattern}", [f"dangerous.question:{pattern}"]
 
     injection, pattern = has_prompt_injection(text)
@@ -273,7 +364,7 @@ def check_question(question_title: str, permission: Dict[str, Dict[str, List[str
     # as untrusted text. This catches hidden task injection without broad file reads.
     for docs_path, content in _read_referenced_docs(text, wiki_root):
         dangerous, pattern = has_dangerous_action(content)
-        if dangerous:
+        if dangerous and not command_info_query:
             return False, f"引用文档包含高危动作 {docs_path}: {pattern}", [f"dangerous.document:{pattern}"]
         injection, pattern = has_prompt_injection(content)
         if injection:

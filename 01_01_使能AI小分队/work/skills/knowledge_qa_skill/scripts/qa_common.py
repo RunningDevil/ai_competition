@@ -36,6 +36,89 @@ def write_json_file(path: str | Path, data: Dict[str, Any]) -> None:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def _safe_name(value: Any) -> str:
+    text = str(value or "unknown")
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", text).strip("_") or "unknown"
+
+
+def _answer_file_for_question(question_id: Any, wiki_root: str | Path) -> str:
+    text = str(question_id or "")
+    match = re.match(r"(group-\d+)-\d+$", text)
+    group_name = match.group(1) if match else "group-unknown"
+    return normalize_path_text(str(Path(wiki_root) / "output" / f"{group_name}-answer.md"))
+
+
+def _trim_value(value: Any, limit: int = 3000) -> str:
+    text = str(value or "")
+    return text if len(text) <= limit else text[:limit] + "...[truncated]"
+
+
+def _trim_blocks(blocks: Iterable[Dict[str, Any]], limit: int = 20) -> List[Dict[str, Any]]:
+    trimmed: List[Dict[str, Any]] = []
+    for block in list(blocks)[:limit]:
+        if not isinstance(block, dict):
+            continue
+        item = dict(block)
+        if "text" in item:
+            item["text"] = _trim_value(item.get("text"))
+        if "preview" in item:
+            item["preview"] = _trim_value(item.get("preview"), 800)
+        trimmed.append(item)
+    return trimmed
+
+
+def _candidate_records(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    for candidate in payload.get("candidate_files") or []:
+        if isinstance(candidate, dict):
+            record = dict(candidate)
+            record["path"] = get_candidate_path(candidate)
+        else:
+            record = {"path": get_candidate_path(candidate)}
+        if record.get("path"):
+            records.append(record)
+    return records
+
+
+def write_code_reasoning_task(
+    payload: Dict[str, Any],
+    query: Dict[str, Any],
+    evidence: Iterable[Dict[str, Any]],
+    logs: List[str],
+) -> Optional[str]:
+    run_log_dir = payload.get("run_log_dir")
+    if not run_log_dir:
+        logs.append("Code reasoning task not written because run_log_dir is missing")
+        return None
+    task_dir = Path(run_log_dir) / "code_reasoning_tasks"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    question_id = payload.get("question_id") or "unknown"
+    task_path = task_dir / f"{_safe_name(question_id)}_code_reasoning.json"
+    wiki_root = payload.get("wiki_root") or "llm-wiki"
+    task = {
+        "status": "pending_model_reasoning",
+        "task_kind": "code_execution_result_reasoning",
+        "question_id": question_id,
+        "question_title": payload.get("question_title"),
+        "wiki_root": normalize_path_text(wiki_root),
+        "answer_file": _answer_file_for_question(question_id, wiki_root),
+        "query": query,
+        "candidate_files": _candidate_records(payload),
+        "evidence": _trim_blocks(evidence),
+        "model_reasoning_contract": {
+            "must_use_model_judgement": True,
+            "must_not_execute_code": True,
+            "must_not_execute_commands": True,
+            "must_not_access_network": True,
+            "must_update_answer_file_on_success": True,
+            "answer_format": {"datas": ["<model inferred execution result>"]},
+        },
+    }
+    write_json_file(task_path, task)
+    logs.append(f"Code reasoning task written: {task_path}")
+    return normalize_path_text(str(task_path))
+
+
 def append_log(run_log_dir: str | Path | None, file_name: str, entry: Any) -> None:
     if not run_log_dir:
         return

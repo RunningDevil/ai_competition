@@ -9,7 +9,7 @@ from qa_common import COUNTABLE_EXTS, normalize_path_text, normalize_text, uniqu
 
 FILE_RE = re.compile(
     r"[\w\-\u4e00-\u9fff（）()【】\[\].]+\.("
-    r"doc|docx|ppt|pptx|xls|xlsx|xml|java|py|html|md|js|txt|csv|json|yaml|yml|properties|env|conf|cfg|ini|log|sh|cmd"
+    r"doc|docx|ppt|pptx|xls|xlsx|xml|java|py|html|md|js|txt|csv|json|yaml|yml|properties|env|conf|cfg|ini|log|sh|cmd|sql|pdf"
     r")",
     re.IGNORECASE,
 )
@@ -28,8 +28,14 @@ CHINESE_HINTS = [
     "端口",
     "地址",
     "命令",
+    "指令",
+    "命令行",
     "控制台",
+    "终端",
+    "客户端",
     "连接",
+    "登录",
+    "访问",
     "数据库",
     "高斯",
     "配置",
@@ -38,6 +44,8 @@ CHINESE_HINTS = [
     "流程",
     "开发",
     "部署",
+    "上线",
+    "发布",
     "运行",
     "接口",
     "风险",
@@ -46,6 +54,23 @@ CHINESE_HINTS = [
     "透视",
     "表格",
     "统计",
+]
+
+SEMANTIC_KEYWORD_GROUPS = [
+    ("上线", "发布", "部署", "投产", "上线流程", "发布流程", "部署流程"),
+    ("数据库", "db", "DB", "高斯", "高斯数据库", "GaussDB", "gsql", "psql", "mysql", "jdbc"),
+    ("账号", "用户", "用户名", "user", "login", "登录"),
+    ("密码", "口令", "凭据", "credential", "secret", "password", "pwd"),
+    ("开源", "开放源代码", "OSS", "open source"),
+    ("需求", "规格", "设计", "方案", "需求设计"),
+    ("命令", "指令", "命令行", "语句", "shell", "脚本", "控制台", "终端", "客户端", "连接", "登录", "访问"),
+    ("ssh", "scp", "sftp", "远程登录", "远程连接", "服务器登录", "登录服务器"),
+    ("curl", "wget", "http", "https", "接口调用", "下载"),
+    ("kubectl", "k8s", "kubernetes", "pod", "集群"),
+    ("docker", "docker-compose", "容器", "镜像"),
+    ("systemctl", "journalctl", "服务", "日志"),
+    ("风险", "漏洞", "安全", "高危", "危险"),
+    ("审批", "评审", "审核", "review"),
 ]
 
 STOPWORDS = {
@@ -103,13 +128,33 @@ def _extract_keywords(title: str) -> List[str]:
             for hint in CHINESE_HINTS:
                 if hint in token:
                     tokens.append(hint)
-            if len(token) <= 10:
+            if len(token) <= 24:
                 for size in (2, 3):
                     for i in range(0, len(token) - size + 1):
                         gram = token[i : i + size]
                         if gram not in STOPWORDS:
                             tokens.append(gram)
     return unique_preserve_order(tokens)
+
+
+def _expand_semantic_keywords(keywords: List[str]) -> List[str]:
+    expanded: List[str] = []
+    for keyword in keywords:
+        expanded.append(keyword)
+        keyword_lower = keyword.lower()
+        for group in SEMANTIC_KEYWORD_GROUPS:
+            group_lowers = [item.lower() for item in group]
+            if any(
+                item_lower
+                and (
+                    item_lower == keyword_lower
+                    or (len(item_lower) >= 3 and item_lower in keyword_lower)
+                    or (len(keyword_lower) >= 3 and keyword_lower in item_lower)
+                )
+                for item_lower in group_lowers
+            ):
+                expanded.extend(group)
+    return unique_preserve_order(expanded)
 
 
 def _detect_intent(title: str, task_type: str) -> str:
@@ -133,6 +178,15 @@ def _detect_intent(title: str, task_type: str) -> str:
     if any(word in title for word in ("涉及", "相关", "文件名", "文件名称", "路径", "在哪")):
         return "file_content_paths"
     return "from_context"
+
+
+def _expects_code_execution_result(title: str) -> bool:
+    lower = title.lower()
+    if any(word in title for word in ("执行结果", "运行结果", "输出结果", "返回结果", "返回值", "执行后", "运行后", "打印结果")):
+        return True
+    if any(word in lower for word in ("return value", "output", "print result", "execution result", "run result")):
+        return True
+    return bool(re.search(r"(结果|返回|输出).*(是多少|是什么|为多少|为何)", title))
 
 
 def analyze_query(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -163,11 +217,12 @@ def analyze_query(payload: Dict[str, Any]) -> Dict[str, Any]:
             directories.append("/".join(parts[:2]))
 
     intent = _detect_intent(title, task_type)
-    keywords = unique_preserve_order(extra_keywords + explicit_files + docs_paths + _extract_keywords(title))
+    keywords = _expand_semantic_keywords(unique_preserve_order(extra_keywords + explicit_files + docs_paths + _extract_keywords(title)))
     return {
         "title": title,
         "task_type": task_type,
         "intent": intent,
+        "expects_code_execution_result": _expects_code_execution_result(title),
         "keywords": keywords,
         "files": unique_preserve_order(explicit_files),
         "docs_paths": unique_preserve_order(docs_paths),

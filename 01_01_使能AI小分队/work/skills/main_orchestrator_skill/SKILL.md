@@ -17,6 +17,7 @@ description: 编排 LLM-WIKI 赛题完整自动化运行流程。Use when 需要
 - 调用文件索引Agent完成文件数量统计、路径查找和候选召回。
 - 调用办公文档Agent完成 Office 正文、批注、修复和 Excel 摘要任务。
 - 调用文本代码Agent完成文本/代码正文、TODO、修复和静态分析任务。
+- 对 `txt/csv/json/yaml/env/conf/cfg/ini/log/sh/cmd/sql/pdf` 等可解码文本后缀执行通用正文兜底读取，作为知识问答上下文；PDF 仅做尽力文本提取。
 - 调用知识问答Agent完成基于上下文的问答和答案草稿生成。
 - 写入 `llm-wiki/output/group-*-answer.md`。
 - 聚合 `logs/trace/{timestamp}.log`。
@@ -77,8 +78,8 @@ python work/skills/main_orchestrator_skill/scripts/main_orchestrator_cli.py \
 5. 安全拒绝时直接采用安全守卫返回的 `answer`。
 6. 安全允许时调用 `question_classifier.py` 进行轻量分类。
 7. 需要文件能力时，先调用 `file_index_skill` 构建或复用索引。
-8. 访问候选文件前调用 `security_guard_skill` 的 `batch_check_resources`。
-9. 根据题型调用 Office/TextCode/KnowledgeQA Skill。
+8. 访问候选文件前调用 `security_guard_skill` 做资源级检查；知识问答链路会逐个过滤扩展候选，避免扩容后被无关黑名单候选整题拖垮。
+9. 根据题型调用 Office/TextCode/KnowledgeQA Skill；知识问答会按题型扩展候选上限，并把通用文本兜底块传入 `context_blocks`；命令类问题会优先扫描命令目录、命令文件名和命令相关后缀。
 10. 使用 `answer_validator.py` 校验并规范化答案。
 11. 写入 `llm-wiki/output/group-*-answer.md`。
 12. 使用 `trace_collector.py` 聚合本次运行日志。
@@ -104,6 +105,7 @@ python work/skills/main_orchestrator_skill/scripts/main_orchestrator_cli.py \
 
 ## 已知边界
 
-- 当前分类器是轻量规则版，后续需要用公开样例和自造样例继续扩展。
-- 复杂 Office 批注修复、真实代码执行结果、其他后缀正文兜底仍依赖后续增强。
+- 当前分类器仍是轻量规则版，但已增强“多少份/共有/一共/合计/总计/Word/Excel”等数量问法。
+- 复杂 Office 批注修复和真实代码执行结果仍依赖受控模型任务包。
+- 通用文本兜底支持常见可解码文本后缀；PDF 只做尽力读取，扫描版 PDF、图片和二进制文件仍不覆盖。
 - 知识问答答案质量取决于文件索引召回和上游文本抽取质量。

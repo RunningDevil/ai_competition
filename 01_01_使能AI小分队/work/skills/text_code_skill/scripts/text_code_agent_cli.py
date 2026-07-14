@@ -16,9 +16,12 @@ from text_code_common import (
     get_extension,
     make_base_result,
     make_error,
+    output_fixed_path,
     read_json_file,
+    rel_to_docs,
     resolve_candidate_path,
     todos_to_answer,
+    write_complex_repair_task,
     write_json_file,
 )
 from text_fixer import conservative_fix
@@ -105,6 +108,7 @@ def _run_fix(payload: Dict[str, Any], candidate_paths: List[Path], logs: List[st
     wiki_root = payload.get("wiki_root") or "llm-wiki"
     fixed_root = payload.get("fixed_root")
     filters = payload.get("filters") or {}
+    complex_tasks: List[str] = []
     for path in candidate_paths:
         todos = extract_todos_from_text(path, wiki_root, logs)
         if filters:
@@ -112,7 +116,32 @@ def _run_fix(payload: Dict[str, Any], candidate_paths: List[Path], logs: List[st
         result = conservative_fix(path, wiki_root, fixed_root, todos, logs)
         if result.get("status") == "ok":
             return result
-    return make_error("fix_todos", "No text/code TODO could be reliably fixed", logs)
+        if todos:
+            try:
+                context_blocks = extract_text_blocks(path, wiki_root, logs)
+            except Exception as exc:
+                logs.append(f"Complex repair context extraction failed for {path}: {exc}")
+                context_blocks = []
+            _, target_rel = output_fixed_path(path, wiki_root, fixed_root)
+            task_path = write_complex_repair_task(
+                payload,
+                path,
+                rel_to_docs(path, wiki_root),
+                target_rel,
+                get_extension(path),
+                todos,
+                context_blocks,
+                str(result.get("reason") or "deterministic text/code repair failed"),
+                logs,
+            )
+            if task_path:
+                complex_tasks.append(task_path)
+    result = make_error("fix_todos", "No text/code TODO could be reliably fixed", logs)
+    if complex_tasks:
+        result["status"] = "complex_repair_required"
+        result["complex_repair_tasks"] = complex_tasks
+        result["reason"] = "复杂 TODO/批注修复需要由外层 CodeAgent 按 INSTRUCTION.md 执行模型兜底"
+    return result
 
 
 def run(payload: Dict[str, Any]) -> Dict[str, Any]:

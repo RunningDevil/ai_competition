@@ -9,9 +9,12 @@ from comment_parser import looks_like_comment, parse_comment_text
 from office_common import (
     convert_legacy_office,
     extract_printable_text_from_binary,
+    filter_comments,
+    fixed_relative_path,
     get_extension,
     make_error,
     normalize_path_text,
+    replacement_from_comment,
     source_relative_to_docs,
 )
 
@@ -19,6 +22,8 @@ from office_common import (
 WORD_NS = {
     "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
 }
+W_P = f"{{{WORD_NS['w']}}}p"
+W_T = f"{{{WORD_NS['w']}}}t"
 
 
 def _text_from_xml_element(element: ET.Element) -> str:
@@ -92,9 +97,65 @@ def extract_comments(path: Path, wiki_root: str | Path, logs: List[str]) -> List
     return []
 
 
-def conservative_fix(path: Path, wiki_root: str | Path, logs: List[str]) -> Dict[str, Any]:
+def _replace_in_document_xml(xml_bytes: bytes, old: str, new: str) -> Tuple[bytes, int]:
+    root = ET.fromstring(xml_bytes)
+    replaced_count = 0
+    for paragraph in root.iter(W_P):
+        text_nodes = [node for node in paragraph.iter(W_T)]
+        if not text_nodes:
+            continue
+        combined = "".join(node.text or "" for node in text_nodes)
+        if old not in combined:
+            continue
+        updated = combined.replace(old, new, 1)
+        text_nodes[0].text = updated
+        for node in text_nodes[1:]:
+            node.text = ""
+        replaced_count += 1
+        break
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True), replaced_count
+
+
+def _write_replaced_docx(source: Path, target: Path, old: str, new: str, logs: List[str]) -> int:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    replaced_count = 0
+    with zipfile.ZipFile(source, "r") as zin, zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename == "word/document.xml":
+                data, replaced_count = _replace_in_document_xml(data, old, new)
+            zout.writestr(item, data)
+    if replaced_count:
+        logs.append(f"Replaced Word text: {old} -> {new}")
+    else:
+        logs.append(f"Replacement text not found in Word body: {old}")
+    return replaced_count
+
+
+def conservative_fix(path: Path, wiki_root: str | Path, logs: List[str], filters: Dict[str, Any] | None = None) -> Dict[str, Any]:
     comments = extract_comments(path, wiki_root, logs)
+    if filters:
+        comments = filter_comments(comments, filters)
     if not comments:
         return make_error("fix_comments", f"No reliable Word comments found for {normalize_path_text(str(path))}", logs)
-    logs.append("Word comments found, but deterministic Word repair is not implemented yet; refusing to fake a fixed file")
+    source_rel = source_relative_to_docs(path, wiki_root)
+    target_rel = fixed_relative_path(source_rel)
+    target_abs = Path(wiki_root) / target_rel
+    for comment in comments:
+        replacement = replacement_from_comment(comment)
+        if not replacement:
+            continue
+        old, new = replacement
+        replaced_count = _write_replaced_docx(path, target_abs, old, new, logs)
+        if replaced_count:
+            return {
+                "status": "ok",
+                "task_type": "fix_comments",
+                "texts": [],
+                "comments": comments,
+                "answer": {"source": source_rel, "target": target_rel},
+                "fixed_files": [target_rel],
+                "logs": logs,
+            }
+    logs.append("Word comments found, but no deterministic replacement instruction could be applied")
     return make_error("fix_comments", f"No reliable Word repair rule implemented for {normalize_path_text(str(path))}", logs)

@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 OFFICE_EXTS = {"doc", "docx", "ppt", "pptx", "xls", "xlsx"}
 TEXT_CODE_EXTS = {"md", "html", "xml", "java", "py", "js"}
+GENERIC_TEXT_EXTS = {"txt", "csv", "json", "yaml", "yml", "properties", "env", "conf", "cfg", "ini", "log", "sh", "cmd", "sql", "pdf"}
 COUNTABLE_EXTS = OFFICE_EXTS | TEXT_CODE_EXTS
 HIGH_RISK_ANSWER = {"error_msg": "高危命令，拒绝访问"}
 

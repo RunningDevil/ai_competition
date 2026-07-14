@@ -1,13 +1,20 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Tuple
 
 from qa_common import preview_text
 
 
+COMMAND_SIGNAL_RE = re.compile(
+    r"\b(?:ssh|scp|sftp|gsql|psql|mysql|sqlcmd|kubectl|docker(?:-compose)?|curl|wget|python3?|java|mvn|gradle|npm|yarn|pnpm|git|systemctl|journalctl|rm|rmdir|del|remove-item|kill|pkill|taskkill|chmod|chown|bash|sh)\b|命令|指令|命令行|控制台|终端|客户端|连接|登录|清理|停止|重启|权限",
+    re.IGNORECASE,
+)
+
+
 INTENT_KIND_BOOSTS = {
-    "file_content_paths": {"metadata": 14, "text": 8, "index_summary": 4},
+    "file_content_paths": {"text": 16, "table": 12, "comment": 8, "todo": 8, "metadata": 3, "index_summary": 2},
     "environment_info": {"text": 12, "metadata": 6, "comment": 2},
     "command_info": {"text": 12, "metadata": 5},
     "excel_summary": {"table": 22, "text": 10, "metadata": 6},
@@ -30,11 +37,37 @@ def _keyword_weight(keyword: str) -> float:
     return 0.0
 
 
+def _has_negative_keyword_context(text: str, query: Dict[str, Any]) -> bool:
+    compact = "".join(str(text or "").split()).lower()
+    if not compact:
+        return False
+    for keyword in query.get("keywords") or []:
+        key = str(keyword or "").strip().lower()
+        if len(key) < 2:
+            continue
+        if key in {"文件", "路径", "名称", "哪些", "业务", "相关", "涉及"}:
+            continue
+        patterns = (
+            f"不涉及{key}",
+            f"未涉及{key}",
+            f"不包含{key}",
+            f"未包含{key}",
+            f"没有{key}",
+            f"无{key}",
+            f"非{key}",
+        )
+        if any(pattern in compact for pattern in patterns):
+            return True
+    return False
+
+
 def _score_block(block: Dict[str, Any], query: Dict[str, Any]) -> Tuple[float, List[str]]:
     source = str(block.get("source") or "")
     file_type = str(block.get("file_type") or "").lower().lstrip(".")
     kind = str(block.get("kind") or "text")
     text = str(block.get("text") or "")
+    if query.get("intent") == "file_content_paths" and _has_negative_keyword_context(text, query):
+        return 0.0, []
     combined = f"{source} {file_type} {kind} {text}"
     score = 0.0
     reasons: List[str] = []
@@ -71,6 +104,9 @@ def _score_block(block: Dict[str, Any], query: Dict[str, Any]) -> Tuple[float, L
     if intent == "command_info" and ("04_常用命令" in source or "命令" in source):
         score += 18
         reasons.append("command_dir")
+    if intent == "command_info" and COMMAND_SIGNAL_RE.search(combined):
+        score += 10
+        reasons.append("command_signal")
     if intent == "excel_summary" and file_type in {"xls", "xlsx"}:
         score += 18
         reasons.append("excel_file")
@@ -94,7 +130,118 @@ def _score_block(block: Dict[str, Any], query: Dict[str, Any]) -> Tuple[float, L
             score += weight * 0.8
             reasons.append(f"kw_path:{keyword}")
 
+    evidence_reasons = ("file:", "path:", "dir:", "ip:", "kw_path:", "kw_text:")
+    if query.get("intent") == "file_content_paths" and not any(reason.startswith(evidence_reasons) for reason in reasons):
+        return 0.0, []
+
+    if query.get("intent") == "command_info" and not any(
+        str(reason).startswith(("file:", "path:", "dir:", "kw_text:", "kw_path:", "command_dir", "command_signal")) for reason in reasons
+    ):
+        return 0.0, []
+
+    if kind == "metadata" and not any(reason.startswith((*evidence_reasons, "ext:")) for reason in reasons):
+        return 0.0, []
+
     return score, reasons
+
+
+def _unique_reasons(items: List[Dict[str, Any]]) -> List[str]:
+    seen = set()
+    result: List[str] = []
+    for item in items:
+        for reason in item.get("match_reasons") or []:
+            if reason in seen:
+                continue
+            seen.add(reason)
+            result.append(reason)
+    return result
+
+
+def _reason_diversity_score(reasons: List[str]) -> float:
+    prefixes = {str(reason).split(":", 1)[0] for reason in reasons}
+    keyword_hits = {str(reason).split(":", 1)[1] for reason in reasons if str(reason).startswith(("kw_text:", "kw_path:")) and ":" in str(reason)}
+    return min(len(prefixes) * 2.0 + len(keyword_hits) * 1.2, 18.0)
+
+
+def _keyword_hit_values(reasons: List[str]) -> List[str]:
+    values: List[str] = []
+    seen = set()
+    for reason in reasons:
+        text = str(reason)
+        if not text.startswith(("kw_text:", "kw_path:")) or ":" not in text:
+            continue
+        value = text.split(":", 1)[1]
+        if value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
+    return values
+
+
+def _has_strong_keyword_hit(keyword_hits: List[str]) -> bool:
+    for keyword in keyword_hits:
+        stripped = str(keyword).strip()
+        if len(stripped) >= 4:
+            return True
+        if stripped.isascii() and len(stripped) >= 3:
+            return True
+    return False
+
+
+def _is_explicit_metadata_match(item: Dict[str, Any]) -> bool:
+    return any(str(reason).startswith(("file:", "path:", "dir:")) for reason in item.get("match_reasons") or [])
+
+
+def _aggregate_file_content_evidence(scored: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for item in scored:
+        source = str(item.get("source") or "")
+        if not source.startswith("docs/"):
+            continue
+        grouped.setdefault(source, []).append(item)
+
+    summaries: List[Dict[str, Any]] = []
+    for source, items in grouped.items():
+        items.sort(key=lambda item: -float(item.get("score") or 0))
+        content_items = [item for item in items if item.get("kind") != "metadata"]
+        if not content_items and not any(_is_explicit_metadata_match(item) for item in items):
+            continue
+        evidence_items = content_items or items
+        reasons = _unique_reasons(evidence_items)
+        has_explicit_match = any(str(reason).startswith(("file:", "path:", "dir:")) for reason in reasons)
+        keyword_hits = _keyword_hit_values(reasons)
+        if not has_explicit_match and len(keyword_hits) < 2 and not _has_strong_keyword_hit(keyword_hits):
+            continue
+        top_score = float(evidence_items[0].get("score") or 0)
+        support_score = sum(float(item.get("score") or 0) for item in evidence_items[1:4]) * 0.35
+        block_bonus = min(len(content_items), 4) * 1.5
+        score = round(top_score + support_score + block_bonus + _reason_diversity_score(reasons), 3)
+        previews = []
+        for item in evidence_items[:3]:
+            location = str(item.get("location") or "file")
+            text = preview_text(item.get("text"), 300)
+            if text:
+                previews.append(f"[{location}] {text}")
+        summaries.append(
+            {
+                "source": source,
+                "file_type": evidence_items[0].get("file_type", ""),
+                "kind": "file_summary",
+                "location": "file",
+                "text": "\n".join(previews),
+                "metadata": {
+                    "block_count": len(items),
+                    "content_block_count": len(content_items),
+                    "top_locations": [item.get("location") for item in evidence_items[:5]],
+                },
+                "score": score,
+                "match_reasons": reasons,
+                "preview": preview_text("\n".join(previews), 260),
+            }
+        )
+
+    summaries.sort(key=lambda item: (-float(item.get("score") or 0), str(item.get("source") or "")))
+    return summaries[:limit]
 
 
 def retrieve_evidence(blocks: List[Dict[str, Any]], query: Dict[str, Any], limit: int = 8) -> List[Dict[str, Any]]:
@@ -110,4 +257,6 @@ def retrieve_evidence(blocks: List[Dict[str, Any]], query: Dict[str, Any], limit
         scored.append(item)
 
     scored.sort(key=lambda item: (-float(item.get("score") or 0), str(item.get("source") or ""), str(item.get("location") or "")))
+    if query.get("intent") == "file_content_paths":
+        return _aggregate_file_content_evidence(scored, limit)
     return scored[:limit]

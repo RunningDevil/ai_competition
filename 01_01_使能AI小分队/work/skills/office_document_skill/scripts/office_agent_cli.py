@@ -14,14 +14,24 @@ from office_common import (
     comments_to_answer,
     ensure_resource_checked,
     filter_comments,
+    fixed_relative_path,
     get_extension,
     is_office_file,
     make_base_result,
     make_error,
     read_json_file,
     resolve_candidate_path,
+    source_relative_to_docs,
+    write_complex_repair_task,
     write_json_file,
 )
+
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 
 WORD_EXTS = {".doc", ".docx"}
@@ -101,18 +111,49 @@ def _extract_comments(payload: Dict[str, Any], candidate_paths: List[Path], logs
 
 def _fix_comments(payload: Dict[str, Any], candidate_paths: List[Path], logs: List[str]) -> Dict[str, Any]:
     wiki_root = payload.get("wiki_root") or "llm-wiki"
+    filters = payload.get("filters") or {}
+    complex_tasks: List[str] = []
     for path in candidate_paths:
         processor = _processor_for(get_extension(path))
         if not processor:
             continue
         try:
-            result = processor.conservative_fix(path, wiki_root, logs)
+            result = processor.conservative_fix(path, wiki_root, logs, filters)
             if result.get("status") == "ok":
                 return result
             logs.extend(result.get("logs") or [])
+            comments = processor.extract_comments(path, wiki_root, logs)
+            if filters:
+                comments = filter_comments(comments, filters)
+            if comments and get_extension(path) in {".docx", ".pptx", ".xlsx"}:
+                try:
+                    texts = processor.extract_text(path, wiki_root, logs)
+                except Exception as exc:
+                    logs.append(f"Complex repair context extraction failed for {path}: {exc}")
+                    texts = []
+                source_rel = source_relative_to_docs(path, wiki_root)
+                target_rel = fixed_relative_path(source_rel)
+                task_path = write_complex_repair_task(
+                    payload,
+                    path,
+                    source_rel,
+                    target_rel,
+                    get_extension(path).lstrip("."),
+                    comments,
+                    texts,
+                    str(result.get("error_msg") or result.get("reason") or "deterministic office repair failed"),
+                    logs,
+                )
+                if task_path:
+                    complex_tasks.append(task_path)
         except Exception as exc:
             logs.append(f"Fix failed for {path}: {exc}")
-    return make_error("fix_comments", "No office file could be reliably fixed", logs)
+    result = make_error("fix_comments", "No office file could be reliably fixed", logs)
+    if complex_tasks:
+        result["status"] = "complex_repair_required"
+        result["complex_repair_tasks"] = complex_tasks
+        result["error_msg"] = "复杂批注修复需要由外层 CodeAgent 按 INSTRUCTION.md 执行模型兜底"
+    return result
 
 
 def _excel_analyze(payload: Dict[str, Any], candidate_paths: List[Path], logs: List[str]) -> Dict[str, Any]:
@@ -121,7 +162,7 @@ def _excel_analyze(payload: Dict[str, Any], candidate_paths: List[Path], logs: L
         if get_extension(path) not in EXCEL_EXTS:
             continue
         try:
-            return excel_processor.analyze(path, wiki_root, logs)
+            return excel_processor.analyze(path, wiki_root, logs, payload)
         except Exception as exc:
             logs.append(f"Excel analysis failed for {path}: {exc}")
     return make_error("excel_analyze", "No Excel file could be analyzed", logs)

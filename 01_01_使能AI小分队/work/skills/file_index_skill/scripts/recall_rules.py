@@ -19,7 +19,7 @@ from file_index_common import (
 
 FILE_PATTERN = re.compile(
     r"[A-Za-z0-9_\-\u4e00-\u9fff\uff00-\uffef（）()、，, .~$]+?\."
-    r"(?:docx?|pptx?|xlsx?|xml|java|py|html|md|js)",
+    r"(?:docx?|pptx?|xlsx?|xml|java|py|html|md|js|txt|csv|json|ya?ml|properties|env|conf|cfg|ini|log|sh|cmd|sql|pdf)",
     re.IGNORECASE,
 )
 
@@ -36,6 +36,14 @@ def extract_extensions(question_title: str) -> List[str]:
         ]
         if any(re.search(pattern, text) for pattern in patterns):
             result.append(ext)
+    alias_groups = [
+        (("word", "word文档", "文字文档"), ["doc", "docx"]),
+        (("powerpoint", "演示文稿", "幻灯片"), ["ppt", "pptx"]),
+        (("excel", "电子表格", "工作簿"), ["xls", "xlsx"]),
+    ]
+    for aliases, mapped in alias_groups:
+        if any(alias in text for alias in aliases):
+            result.extend(mapped)
     return unique_preserve_order(result)
 
 

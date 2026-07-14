@@ -144,7 +144,7 @@ work/skills/knowledge_qa_skill/
 - 不主动访问 `candidate_files` 或 `context_blocks` 之外的文件。
 - 不读取系统目录、环境变量、网络资源或 Permission 黑名单资源。
 - 不做最终高危拒绝判定，但必须尊重上游安全守卫Agent的检查结果。
-- 不伪造答案、路径、密码、命令输出或代码执行结果。
+- 不执行代码，不伪造命令输出或代码执行结果；执行结果类问题应生成模型静态推演任务包，由外层 CodeAgent 按 `INSTRUCTION.md` 推演并回写答案。
 
 ## 协作边界
 
