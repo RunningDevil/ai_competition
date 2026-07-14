@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<environment name="staging-dashboard">
+  <owner>platform-team</owner>
+  <service name="dashboard-api">
+    <replicas>2</replicas>
+    <!-- TODO: 将压测环境副本数调整为 3，并补充扩容触发条件,to:冯二,end_date:20260730 -->
+    <cpuLimit>4</cpuLimit>
+    <memoryLimit>8Gi</memoryLimit>
+  </service>
+  <database>
+    <pool min="5" max="20" />
+    <!-- todo：补充连接池等待超时配置，to：陈三，end_date：20260728 -->
+  </database>
+</environment>
