@@ -8,7 +8,7 @@
     {"id":"group-1-7","title":"筛选docs/test_docs目录下所有文件中，责任人为李四且end_date晚于20261201的批注或TODO列表","level":"困难"},
     {"id":"group-1-8","title":"筛选docs/test_docs目录下所有文件中，end_date早于20260801的批注或TODO列表","level":"困难"},
     {"id":"group-1-9","title":"筛选docs/test_docs目录下所有Markdown文件中，责任人为刘四的TODO列表","level":"中等"},
-    {"id":"group-1-10","title":"筛选docs/test_docs目录下所有文件中，责任人为客户运营组的批注或TODO列表，并输出所在文件名和截止日期","level":"困难"},
+    {"id":"group-1-10","title":"筛选docs/test_docs目录下所有文件中，责任人为客户运营组的批注或TODO列表","level":"困难"},
     {"id":"group-1-11","title":"统计docs/test_docs目录下所有Word、PPT、Excel和代码文件中，责任人为刘四的批注或TODO数量","level":"中等"},
     {"id":"group-1-12","title":"统计docs/test_docs目录下所有Word文件中，责任人为张三的批注数量","level":"中等"},
     {"id":"group-1-13","title":"统计docs/test_docs目录下所有PPT文件中，责任人为王五的批注数量","level":"中等"},

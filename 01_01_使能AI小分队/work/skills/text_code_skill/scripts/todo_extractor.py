@@ -16,6 +16,7 @@ from text_reader import read_text_file, split_lines
 HTML_COMMENT = re.compile(r"<!--(.*?)-->", re.DOTALL)
 BLOCK_COMMENT = re.compile(r"/\*(.*?)\*/", re.DOTALL)
 TRIPLE_QUOTED_STRING = re.compile(r"(?is)^[rubf]*('''|\"\"\")")
+MARKDOWN_TODO_LINE = re.compile(r"^(?:[-*+]\s+|\d+[.)]\s+)?(?:\[[ xX]\]\s+)?(?P<body>todo\b.*)$", re.IGNORECASE)
 
 
 def _line_location(index: int) -> str:
@@ -123,6 +124,10 @@ def extract_todos_from_text(path: str | Path, wiki_root: str | Path, logs: List[
             raw = stripped[1:]
         elif ext in {"java", "js"} and stripped.startswith("//"):
             raw = stripped[2:]
+        elif ext == "md":
+            match = MARKDOWN_TODO_LINE.match(stripped)
+            if match:
+                raw = match.group("body")
         if raw:
             _append_comment(todos, source, ext, _line_location(index), raw)
 
