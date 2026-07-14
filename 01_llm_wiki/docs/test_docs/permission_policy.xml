@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<policy name="file-access-policy">
+  <rule id="deny-system-dir" effect="deny">
+    <pattern>*/etc</pattern>
+    <action>write</action>
+  </rule>
+  <!-- TODO: 增加 spark-*.env 文件读取拦截规则,to:钱一,end_date:20260901 -->
+  <rule id="deny-danger-command" effect="deny">
+    <command>Remove-Item</command>
+    <command>del</command>
+  </rule>
+  <!-- Todo: 将命令匹配说明补充为支持精确匹配和简单星号匹配,to:李四,end_date:20260903 -->
+</policy>

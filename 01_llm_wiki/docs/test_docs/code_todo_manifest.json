@@ -1,0 +1,182 @@
+[
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\env_config_review.xml",
+    "relative_path": "01_llm_wiki/docs/test_docs/env_config_review.xml",
+    "type": "xml",
+    "todo_count": 2,
+    "todos": [
+      "<!-- TODO: 将压测环境副本数调整为 3，并补充扩容触发条件,to:冯二,end_date:20260730 -->",
+      "<!-- todo：补充连接池等待超时配置，to：陈三，end_date：20260728 -->"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\permission_policy.xml",
+    "relative_path": "01_llm_wiki/docs/test_docs/permission_policy.xml",
+    "type": "xml",
+    "todo_count": 2,
+    "todos": [
+      "<!-- TODO: 增加 spark-*.env 文件读取拦截规则,to:钱一,end_date:20260901 -->",
+      "<!-- Todo: 将命令匹配说明补充为支持精确匹配和简单星号匹配,to:李四,end_date:20260903 -->"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\workflow_definition.xml",
+    "relative_path": "01_llm_wiki/docs/test_docs/workflow_definition.xml",
+    "type": "xml",
+    "todo_count": 2,
+    "todos": [
+      "<!-- TODO: 在 security-review 后增加法务 SLA 附件确认步骤,to:冯二,end_date:20260903 -->",
+      "<!-- todo: 将 trial-run 的退出条件补充为周报完成且风险关闭,to:韩八,end_date:20260905 -->"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\CustomerRenewalService.java",
+    "relative_path": "01_llm_wiki/docs/test_docs/CustomerRenewalService.java",
+    "type": "java",
+    "todo_count": 2,
+    "todos": [
+      "// TODO: 将核心客户续费率目标从 92% 改为按 95% 追踪,to:张三,end_date:20261231",
+      "// todo：把“开源开发人员”统一替换为“开源软件开发人员”,to：李四,end_date：20261220"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\ServiceGovernanceController.java",
+    "relative_path": "01_llm_wiki/docs/test_docs/ServiceGovernanceController.java",
+    "type": "java",
+    "todo_count": 2,
+    "todos": [
+      "// TODO: 为非核心链路补充单独的超时阈值和失败率阈值,to:李四,end_date:20261115",
+      "// TODO: 将 traceId 参数命名统一为 trace_id，并同步日志字段,to:王五,end_date:20261030"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\SupplierReviewJob.java",
+    "relative_path": "01_llm_wiki/docs/test_docs/SupplierReviewJob.java",
+    "type": "java",
+    "todo_count": 2,
+    "todos": [
+      "// TODO: 将安全评估状态 PASS 改为 PENDING_RECHECK 后再进入试运行,to:钱一,end_date:20260901",
+      "// todo: 补充 SLA 附件编号校验，缺失时阻止准入流程,to:冯二,end_date:20260903"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\dashboard_metric_loader.py",
+    "relative_path": "01_llm_wiki/docs/test_docs/dashboard_metric_loader.py",
+    "type": "py",
+    "todo_count": 2,
+    "todos": [
+      "# TODO: 将刷新频率从每日 8 点调整为每小时一次,to:赵六,end_date:20260920",
+      "# todo：补充毛利和退款两个模块，to：孙七，end_date：20261005"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\mobile_feedback_cleaner.py",
+    "relative_path": "01_llm_wiki/docs/test_docs/mobile_feedback_cleaner.py",
+    "type": "py",
+    "todo_count": 2,
+    "todos": [
+      "# TODO: 将离线提示“网络异常”统一改为“当前网络不可用，请稍后重试”,to:吴九,end_date:20260825",
+      "# TODO: 补充 3 秒、10 秒、30 秒三档弱网重试策略,to:郑十,end_date:20260828"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\ops_backup_check.py",
+    "relative_path": "01_llm_wiki/docs/test_docs/ops_backup_check.py",
+    "type": "py",
+    "todo_count": 2,
+    "todos": [
+      "# TODO: 执行备份前增加 df -h 磁盘空间检查，目标分区使用率低于 80% 才允许继续,to:孟七,end_date:20260726",
+      "# todo: 执行重启前补充环境名、服务名、工单编号三项确认,to:邹六,end_date:20260725"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\mobile_login.html",
+    "relative_path": "01_llm_wiki/docs/test_docs/mobile_login.html",
+    "type": "html",
+    "todo_count": 2,
+    "todos": [
+      "<!-- TODO: 将按钮文案“立即进入”改为“开始使用”，并同步埋点名称,to:周八,end_date:20260818 -->",
+      "<!-- todo: 离线状态提示语改为“当前网络不可用，请稍后重试”,to:吴九,end_date:20260825 -->"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\dashboard_filter_panel.html",
+    "relative_path": "01_llm_wiki/docs/test_docs/dashboard_filter_panel.html",
+    "type": "html",
+    "todo_count": 2,
+    "todos": [
+      "<!-- TODO: 增加城市经理和普通员工两类权限筛选条件,to:钱一,end_date:20261008 -->",
+      "<!-- todo：模块下拉补充毛利和退款选项，to：孙七，end_date：20261005 -->"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\supplier_review_form.html",
+    "relative_path": "01_llm_wiki/docs/test_docs/supplier_review_form.html",
+    "type": "html",
+    "todo_count": 2,
+    "todos": [
+      "<!-- TODO: 将默认值“通过”改为“待复核”,to:钱一,end_date:20260901 -->",
+      "<!-- todo: 补充 SLA 附件编号必填校验，to:冯二,end_date:20260903 -->"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\release_checklist.md",
+    "relative_path": "01_llm_wiki/docs/test_docs/release_checklist.md",
+    "type": "md",
+    "todo_count": 2,
+    "todos": [
+      "- TODO: 补充回滚责任人、审批人和通知渠道,to:赵六,end_date:20260810",
+      "- TODO: 将 traceId 和 TraceID 统一改为 trace_id,to:王五,end_date:20261030"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\api_training_notes.md",
+    "relative_path": "01_llm_wiki/docs/test_docs/api_training_notes.md",
+    "type": "md",
+    "todo_count": 2,
+    "todos": [
+      "<!-- TODO: 将示例字段统一改为 user_name、dept_name、role_name,to:刘四,end_date:20261012 -->",
+      "<!-- TODO：补充 401、403、429 三类错误码说明，to：何五，end_date：20261018 -->"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\supplier_trial_runbook.md",
+    "relative_path": "01_llm_wiki/docs/test_docs/supplier_trial_runbook.md",
+    "type": "md",
+    "todo_count": 2,
+    "todos": [
+      "<!-- TODO: 将安全评估状态“通过”改为“待复核”,to:钱一,end_date:20260901 -->",
+      "<!-- todo: 补充“附件 3: 服务等级协议 SLA-2026-06”,to:冯二,end_date:20260903 -->"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\retryPolicy.js",
+    "relative_path": "01_llm_wiki/docs/test_docs/retryPolicy.js",
+    "type": "js",
+    "todo_count": 2,
+    "todos": [
+      "// TODO: 补充 3 秒、10 秒、30 秒三档弱网重试策略,to:郑十,end_date:20260828",
+      "// todo: 将“网络异常”改为“当前网络不可用，请稍后重试”,to:吴九,end_date:20260825"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\dashboardPermissions.js",
+    "relative_path": "01_llm_wiki/docs/test_docs/dashboardPermissions.js",
+    "type": "js",
+    "todo_count": 2,
+    "todos": [
+      "// TODO: 增加区域经理、城市经理、普通员工三类数据范围,to:钱一,end_date:20261008",
+      "// todo：补充毛利和退款模块，to：孙七，end_date：20261005"
+    ]
+  },
+  {
+    "path": "D:\\ai_competition\\01_llm_wiki\\docs\\test_docs\\supplierReview.js",
+    "relative_path": "01_llm_wiki/docs/test_docs/supplierReview.js",
+    "type": "js",
+    "todo_count": 2,
+    "todos": [
+      "// TODO: 将 PASS 映射为 PENDING_RECHECK，不允许直接进入长期合同,to:钱一,end_date:20260901",
+      "// TODO：补充联系人姓名、手机号和公司邮箱三项校验，to：冯二，end_date：20260903"
+    ]
+  }
+]

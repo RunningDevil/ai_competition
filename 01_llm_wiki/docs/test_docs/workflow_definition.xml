@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow id="supplier-onboarding">
+  <step name="collect-documents" owner="procurement" />
+  <step name="security-review" owner="security" />
+  <!-- TODO: 在 security-review 后增加法务 SLA 附件确认步骤,to:冯二,end_date:20260903 -->
+  <step name="trial-run" owner="business" durationDays="30" />
+  <!-- todo: 将 trial-run 的退出条件补充为周报完成且风险关闭,to:韩八,end_date:20260905 -->
+</workflow>
