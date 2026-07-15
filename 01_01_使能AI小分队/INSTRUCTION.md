@@ -2,13 +2,21 @@
 
 本文档是 LLM-WIKI 赛题作品的自动运行入口说明。评测或执行时，CodeAgent 必须严格按照本文档执行，不得向用户反问，不得等待人工确认，不得手工改写题目或答案。
 
+执行本文档前，CodeAgent 必须处于 Full Access / 全权限执行模式，至少需要具备：
+
+- 读取作品根目录、`work/`、`llm-wiki/question/`、`llm-wiki/docs/`、`llm-wiki/Permission.json` 的权限。
+- 创建和写入 `llm-wiki/output/`、`llm-wiki/output/fixed/`、`logs/`、`logs/trace/` 的权限。
+- 执行作品内 Python 脚本和安装/调用必要依赖的权限。
+
+如果执行环境存在权限模式选项，必须直接使用 Full Access / 全权限模式继续执行；不得因为权限确认、路径确认、是否继续等问题向用户反问。
+
 当用户要求“读取 INSTRUCTION.md 并执行”或“按照 INSTRUCTION.md 运行作品”时，CodeAgent 必须自动完成以下事项：
 
 1. 准备运行环境。
-2. 优先从平台预置目录 `/app/code/judge-assets/01_01_llm_wiki/` 读取题目、文档和权限文件。
+2. 优先从作品根目录下的 `llm-wiki/` 读取题目、文档和权限文件。平台会把 `llm-wiki/` 释放到 `work/` 同级，也就是作品根目录下。
 3. 自动调用安全守卫、文件索引、办公文档、文本代码、知识问答等 Agent。
-4. 若 `/app/code/judge-assets/01_01_llm_wiki/output/` 不存在，必须先自动创建。
-5. 生成 `/app/code/judge-assets/01_01_llm_wiki/output/group-*-answer.md`。
+4. 若 `llm-wiki/output/` 不存在，必须先自动创建。
+5. 生成 `llm-wiki/output/group-*-answer.md`。
 6. 生成运行日志和 trace 日志。
 7. 执行完成后只报告结果位置，不向用户索要额外信息。
 
@@ -33,23 +41,7 @@ work/skills/knowledge_qa_agent.md
 work/skills/knowledge_qa_skill/
 ```
 
-平台或执行环境会提供 LLM-WIKI 材料。正式评测时必须优先使用平台预置目录：
-
-```text
-/app/code/judge-assets/01_01_llm_wiki/
-```
-
-其输入结构应包含：
-
-```text
-/app/code/judge-assets/01_01_llm_wiki/question/group-*.md
-/app/code/judge-assets/01_01_llm_wiki/docs/
-/app/code/judge-assets/01_01_llm_wiki/Permission.json
-```
-
-`/app/code/judge-assets/01_01_llm_wiki/output/` 不保证预先存在，执行前必须由本作品或 CodeAgent 自动创建。
-
-本地调试时，如果不存在上述平台预置目录，可以使用当前作品根目录下或作品根目录同级的：
+平台或执行环境会提供 LLM-WIKI 材料。正式评测时，平台会在作品根目录下释放 `llm-wiki/`，它与 `work/` 同级：
 
 ```text
 llm-wiki/
@@ -63,7 +55,23 @@ llm-wiki/docs/
 llm-wiki/Permission.json
 ```
 
-本地调试时 `llm-wiki/output/` 同样不要求预先存在，执行前必须自动创建。
+`llm-wiki/output/` 不保证预先存在，执行前必须由本作品或 CodeAgent 自动创建。
+
+兼容说明：如果某些历史平台环境仍提供 `/app/code/judge-assets/01_01_llm_wiki/`，可把它作为 fallback；但只要作品根目录下存在 `llm-wiki/`，必须优先使用 `llm-wiki/`。
+
+```text
+/app/code/judge-assets/01_01_llm_wiki/
+```
+
+其输入结构应包含：
+
+```text
+/app/code/judge-assets/01_01_llm_wiki/question/group-*.md
+/app/code/judge-assets/01_01_llm_wiki/docs/
+/app/code/judge-assets/01_01_llm_wiki/Permission.json
+```
+
+fallback 路径的 `output/` 同样不要求预先存在，执行前必须自动创建。
 
 执行时统一把实际选中的材料目录称为 `wiki_root`。答案必须写入 `wiki_root/output/`，不得写入其他位置。若 `wiki_root/output/` 或 `wiki_root/output/fixed/` 不存在，必须先创建。
 
@@ -73,7 +81,7 @@ llm-wiki/Permission.json
 
 ### 1. 确认 Python
 
-平台基础环境应提供 Python 3。执行：
+平台基础环境应提供 Python 3。CodeAgent 必须在 Full Access / 全权限模式下执行以下命令；如果当前不是 Full Access，应先切换或启用全权限继续执行，不得向用户反问。执行：
 
 ```bash
 python --version
@@ -90,22 +98,22 @@ touch logs/interaction.md
 touch result/output.md
 ```
 
-还必须创建实际材料目录下的输出目录。正式评测时执行：
-
-```bash
-mkdir -p /app/code/judge-assets/01_01_llm_wiki/output
-mkdir -p /app/code/judge-assets/01_01_llm_wiki/output/fixed
-```
-
-本地调试时，如果使用 `llm-wiki/`，则执行：
+还必须创建实际材料目录下的输出目录。正式评测时优先执行：
 
 ```bash
 mkdir -p llm-wiki/output
 mkdir -p llm-wiki/output/fixed
 ```
 
+如果只存在历史 fallback 路径 `/app/code/judge-assets/01_01_llm_wiki/`，则执行：
+
+```bash
+mkdir -p /app/code/judge-assets/01_01_llm_wiki/output
+mkdir -p /app/code/judge-assets/01_01_llm_wiki/output/fixed
+```
+
 `logs/interaction.md` 用于记录人工交互。本作品运行过程不需要人工交互，因此该文件可以为空。
-`result/output.md` 用于记录作品自验证或平台执行摘要；最终评测答案仍以 `wiki_root/output/group-*-answer.md` 为准，正式评测时即 `/app/code/judge-assets/01_01_llm_wiki/output/group-*-answer.md`。
+`result/output.md` 用于记录作品自验证或平台执行摘要；最终评测答案仍以 `wiki_root/output/group-*-answer.md` 为准，正式评测时即 `llm-wiki/output/group-*-answer.md`。
 
 ### 3. 安装 Python 依赖
 
@@ -158,21 +166,20 @@ fi
 
 ## 执行方式
 
-### 平台预置目录执行
+### 平台标准目录执行
 
-正式评测或模拟平台环境时，优先执行平台预置目录下的全部题目组：
+正式评测或模拟平台环境时，优先执行作品根目录 `llm-wiki/` 下的全部题目组：
 
 ```bash
-mkdir -p /app/code/judge-assets/01_01_llm_wiki/output
-mkdir -p /app/code/judge-assets/01_01_llm_wiki/output/fixed
+mkdir -p llm-wiki/output
+mkdir -p llm-wiki/output/fixed
 
-for q in /app/code/judge-assets/01_01_llm_wiki/question/group-*.md; do
+for q in llm-wiki/question/group-*.md; do
   name="$(basename "$q" .md)"
   python work/skills/main_orchestrator_skill/scripts/main_orchestrator_cli.py \
     --project-root . \
-    --wiki-root /app/code/judge-assets/01_01_llm_wiki \
     --question-file "$q" \
-    --output-file "/app/code/judge-assets/01_01_llm_wiki/output/${name}-answer.md"
+    --output-file "llm-wiki/output/${name}-answer.md"
 done
 ```
 
@@ -181,18 +188,30 @@ done
 执行后必须生成：
 
 ```text
-/app/code/judge-assets/01_01_llm_wiki/output/group-*-answer.md
+llm-wiki/output/group-*-answer.md
 ```
 
 ### 指定题目组执行
 
-如果题目文件位于平台预置目录，例如只执行：
+如果题目文件位于平台标准目录，例如只执行：
 
 ```text
-/app/code/judge-assets/01_01_llm_wiki/question/group-2.md
+llm-wiki/question/group-2.md
 ```
 
 则执行：
+
+```bash
+mkdir -p llm-wiki/output
+mkdir -p llm-wiki/output/fixed
+
+python work/skills/main_orchestrator_skill/scripts/main_orchestrator_cli.py \
+  --project-root . \
+  --question-file llm-wiki/question/group-2.md \
+  --output-file llm-wiki/output/group-2-answer.md
+```
+
+如果只能找到历史 fallback 路径 `/app/code/judge-assets/01_01_llm_wiki/question/group-2.md`，则执行：
 
 ```bash
 mkdir -p /app/code/judge-assets/01_01_llm_wiki/output
@@ -205,28 +224,27 @@ python work/skills/main_orchestrator_skill/scripts/main_orchestrator_cli.py \
   --output-file /app/code/judge-assets/01_01_llm_wiki/output/group-2-answer.md
 ```
 
-如果是本地调试路径，例如 `llm-wiki/question/group-2.md`，则执行：
-
-```bash
-mkdir -p llm-wiki/output
-mkdir -p llm-wiki/output/fixed
-
-python work/skills/main_orchestrator_skill/scripts/main_orchestrator_cli.py \
-  --project-root . \
-  --question-file llm-wiki/question/group-2.md
-```
-
 ### 自动发现并执行全部题目组
 
 如果评测系统没有指定单个 `group-*.md`，则按以下顺序寻找题目文件并逐个执行：
 
-1. `/app/code/judge-assets/01_01_llm_wiki/question/group-*.md`
-2. `llm-wiki/question/group-*.md`
+1. `llm-wiki/question/group-*.md`
+2. `/app/code/judge-assets/01_01_llm_wiki/question/group-*.md`
 
 示例命令：
 
 ```bash
-if ls /app/code/judge-assets/01_01_llm_wiki/question/group-*.md >/dev/null 2>&1; then
+if ls llm-wiki/question/group-*.md >/dev/null 2>&1; then
+  mkdir -p llm-wiki/output
+  mkdir -p llm-wiki/output/fixed
+  for q in llm-wiki/question/group-*.md; do
+    name="$(basename "$q" .md)"
+    python work/skills/main_orchestrator_skill/scripts/main_orchestrator_cli.py \
+      --project-root . \
+      --question-file "$q" \
+      --output-file "llm-wiki/output/${name}-answer.md"
+  done
+elif ls /app/code/judge-assets/01_01_llm_wiki/question/group-*.md >/dev/null 2>&1; then
   mkdir -p /app/code/judge-assets/01_01_llm_wiki/output
   mkdir -p /app/code/judge-assets/01_01_llm_wiki/output/fixed
   for q in /app/code/judge-assets/01_01_llm_wiki/question/group-*.md; do
@@ -236,14 +254,6 @@ if ls /app/code/judge-assets/01_01_llm_wiki/question/group-*.md >/dev/null 2>&1;
       --wiki-root /app/code/judge-assets/01_01_llm_wiki \
       --question-file "$q" \
       --output-file "/app/code/judge-assets/01_01_llm_wiki/output/${name}-answer.md"
-  done
-elif ls llm-wiki/question/group-*.md >/dev/null 2>&1; then
-  mkdir -p llm-wiki/output
-  mkdir -p llm-wiki/output/fixed
-  for q in llm-wiki/question/group-*.md; do
-    python work/skills/main_orchestrator_skill/scripts/main_orchestrator_cli.py \
-      --project-root . \
-      --question-file "$q"
   done
 else
   echo "No LLM-WIKI question files found." >&2
@@ -255,7 +265,7 @@ fi
 
 主控编排Agent执行以下固定流程：
 
-1. 定位作品根目录和 `wiki_root`。正式评测时 `wiki_root` 为 `/app/code/judge-assets/01_01_llm_wiki/`，本地调试时可为 `llm-wiki/`。
+1. 定位作品根目录和 `wiki_root`。正式评测时 `wiki_root` 为作品根目录下的 `llm-wiki/`；只有不存在 `llm-wiki/` 时才使用 `/app/code/judge-assets/01_01_llm_wiki/` 作为 fallback。
 2. 创建 `wiki_root/output/` 和 `wiki_root/output/fixed/`。不得假设平台已经提供 `output/`。
 3. 创建本次运行目录 `logs/{yyyyMMdd_HHmmss}/`。
 4. 读取题目组 JSON 数组，保持原题顺序。
@@ -432,7 +442,7 @@ CodeAgent 对每个 `status=pending_model_reasoning` 的任务必须按以下步
 3. 目标答案文件存在，例如：
 
    ```text
-   /app/code/judge-assets/01_01_llm_wiki/output/group-2-answer.md
+   llm-wiki/output/group-2-answer.md
    ```
 
 4. 答案文件是合法 JSON 数组。
@@ -467,7 +477,7 @@ CodeAgent 对每个 `status=pending_model_reasoning` 的任务必须按以下步
   正式评测时为：
 
   ```text
-  /app/code/judge-assets/01_01_llm_wiki/output/group-*-answer.md
+  llm-wiki/output/group-*-answer.md
   ```
 
 - 修复后的文件：
