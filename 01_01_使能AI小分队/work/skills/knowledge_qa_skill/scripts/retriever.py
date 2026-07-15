@@ -22,9 +22,40 @@ INTENT_KIND_BOOSTS = {
     "from_context": {"text": 10, "comment": 8, "todo": 8, "table": 8, "risk": 8, "metadata": 3},
 }
 
+CONTENT_PATH_EXCLUDED_SEGMENTS = ("/comment_stat_questions/",)
+
 
 def _contains(haystack: str, needle: str) -> bool:
     return bool(needle) and needle.lower() in haystack.lower()
+
+
+def _is_non_business_support_file(source: str, text: str, query: Dict[str, Any]) -> bool:
+    if query.get("intent") != "file_content_paths":
+        return False
+    normalized = source.replace("\\", "/").casefold()
+    if any(segment in normalized for segment in CONTENT_PATH_EXCLUDED_SEGMENTS):
+        return True
+    return False
+
+
+def _required_phrase_matches(combined: str, query: Dict[str, Any]) -> List[str]:
+    phrases = [str(item or "").strip() for item in query.get("required_phrases") or [] if str(item or "").strip()]
+    term_groups = query.get("required_phrase_terms") or []
+    if not phrases:
+        return []
+    matches: List[str] = []
+    for index, phrase in enumerate(phrases):
+        if _contains(combined, phrase):
+            matches.append(phrase)
+            continue
+        terms = []
+        if index < len(term_groups) and isinstance(term_groups[index], list):
+            terms = [str(item or "").strip() for item in term_groups[index] if str(item or "").strip()]
+        if len(terms) >= 2 and all(_contains(combined, term) for term in terms):
+            matches.append("+".join(terms))
+        elif len(terms) == 1 and len(terms[0]) >= 3 and _contains(combined, terms[0]):
+            matches.append(terms[0])
+    return matches
 
 
 def _keyword_weight(keyword: str) -> float:
@@ -66,11 +97,20 @@ def _score_block(block: Dict[str, Any], query: Dict[str, Any]) -> Tuple[float, L
     file_type = str(block.get("file_type") or "").lower().lstrip(".")
     kind = str(block.get("kind") or "text")
     text = str(block.get("text") or "")
+    if _is_non_business_support_file(source, text, query):
+        return 0.0, []
     if query.get("intent") == "file_content_paths" and _has_negative_keyword_context(text, query):
         return 0.0, []
     combined = f"{source} {file_type} {kind} {text}"
     score = 0.0
     reasons: List[str] = []
+
+    if query.get("intent") == "file_content_paths" and query.get("required_phrases"):
+        matched_required = _required_phrase_matches(combined, query)
+        if not matched_required:
+            return 0.0, []
+        score += 30
+        reasons.extend(f"required_phrase:{phrase}" for phrase in matched_required[:3])
 
     kind_boost = INTENT_KIND_BOOSTS.get(query.get("intent"), {}).get(kind, 0)
     if kind_boost:

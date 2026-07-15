@@ -9,7 +9,7 @@ from qa_common import COUNTABLE_EXTS, normalize_path_text, normalize_text, uniqu
 
 FILE_RE = re.compile(
     r"[\w\-\u4e00-\u9fff（）()【】\[\].]+\.("
-    r"doc|docx|ppt|pptx|xls|xlsx|xml|java|py|html|md|js|txt|csv|json|yaml|yml|properties|env|conf|cfg|ini|log|sh|cmd|sql|pdf"
+    r"docx|doc|pptx|ppt|xlsx|xls|xml|java|py|html|md|js|txt|csv|json|yaml|yml|properties|env|conf|cfg|ini|log|sh|cmd|sql|pdf"
     r")",
     re.IGNORECASE,
 )
@@ -157,6 +157,55 @@ def _expand_semantic_keywords(keywords: List[str]) -> List[str]:
     return unique_preserve_order(expanded)
 
 
+def _extract_required_phrases(title: str) -> List[str]:
+    phrases: List[str] = []
+    cleaned = title
+    patterns = [
+        r"(?:涉及|关于|围绕|属于|面向)\s*([A-Za-z0-9_\-\s\u4e00-\u9fff]{2,30}?)(?:业务|项目|主题|模块|系统|功能|场景)",
+        r"([A-Za-z0-9_\-\s\u4e00-\u9fff]{2,30}?)(?:业务|项目|主题|模块|系统|功能|场景)\s*(?:相关|有关|涉及)",
+    ]
+    for pattern in patterns:
+        for match in re.finditer(pattern, cleaned, flags=re.IGNORECASE):
+            phrase = _clean_required_phrase(match.group(1))
+            if phrase:
+                phrases.append(phrase)
+    return unique_preserve_order(phrases)
+
+
+def _clean_required_phrase(value: str) -> str:
+    text = normalize_text(value)
+    text = re.sub(r"(?:目录|文件夹)?[下中里内]$", "", text)
+    text = re.sub(r"^(?:筛选出|检索|找出|查找|输出|返回|列出|所有|全部|相关|涉及|关于|围绕|属于|面向)+", "", text)
+    text = re.sub(r"(?:相关|有关|涉及|文件|文档|资料|路径|名称|列表|清单)+$", "", text)
+    text = text.strip(" 的-_/，,。；;：:？?（）()[]【】\"'")
+    if len(text) < 2:
+        return ""
+    if text in STOPWORDS:
+        return ""
+    return text
+
+
+def _required_phrase_terms(phrase: str) -> List[str]:
+    text = normalize_text(phrase)
+    if re.fullmatch(r"[A-Za-z0-9_\-\s]+", text):
+        return [part for part in re.split(r"[\s_-]+", text) if len(part) >= 2]
+    terms: List[str] = []
+    if re.fullmatch(r"[\u4e00-\u9fff]+", text):
+        if len(text) <= 3:
+            terms.append(text)
+        elif len(text) == 4:
+            terms.extend([text[:2], text[2:]])
+        elif len(text) in {5, 6}:
+            terms.extend([text[:3], text[3:]])
+        else:
+            terms.extend(text[index : index + 2] for index in range(0, len(text), 2))
+    else:
+        for token in re.findall(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9_-]{2,}", text):
+            if token not in STOPWORDS:
+                terms.append(token)
+    return unique_preserve_order(terms)
+
+
 def _detect_intent(title: str, task_type: str) -> str:
     if task_type in {
         "answer_file_content_paths",
@@ -218,12 +267,15 @@ def analyze_query(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     intent = _detect_intent(title, task_type)
     keywords = _expand_semantic_keywords(unique_preserve_order(extra_keywords + explicit_files + docs_paths + _extract_keywords(title)))
+    required_phrases = _extract_required_phrases(title)
     return {
         "title": title,
         "task_type": task_type,
         "intent": intent,
         "expects_code_execution_result": _expects_code_execution_result(title),
         "keywords": keywords,
+        "required_phrases": required_phrases,
+        "required_phrase_terms": [_required_phrase_terms(phrase) for phrase in required_phrases],
         "files": unique_preserve_order(explicit_files),
         "docs_paths": unique_preserve_order(docs_paths),
         "extensions": unique_preserve_order(extensions),

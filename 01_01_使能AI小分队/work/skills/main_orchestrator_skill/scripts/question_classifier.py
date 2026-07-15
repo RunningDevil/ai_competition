@@ -9,7 +9,7 @@ from orchestrator_common import COUNTABLE_EXTS, OFFICE_EXTS, TEXT_CODE_EXTS, nor
 
 FILE_RE = re.compile(
     r"[\w\-\u4e00-\u9fff（）()【】\[\].]+\.("
-    r"doc|docx|ppt|pptx|xls|xlsx|xml|java|py|html|md|js|txt|csv|json|yaml|yml|properties|env|conf|cfg|ini|log|sh|cmd|sql|pdf"
+    r"docx|doc|pptx|ppt|xlsx|xls|xml|java|py|html|md|js|txt|csv|json|yaml|yml|properties|env|conf|cfg|ini|log|sh|cmd|sql|pdf"
     r")",
     re.IGNORECASE,
 )
@@ -35,7 +35,7 @@ COUNT_WORDS = (
 
 EXTENSION_ALIASES = [
     (("word", "Word", "WORD", "Word文档", "word文档", "文字文档"), ["doc", "docx"]),
-    (("powerpoint", "PowerPoint", "ppt", "PPT", "PPTX", "演示文稿", "幻灯片"), ["ppt", "pptx"]),
+    (("powerpoint", "PowerPoint", "演示文稿", "幻灯片"), ["ppt", "pptx"]),
     (("excel", "Excel", "EXCEL", "电子表格", "工作簿"), ["xls", "xlsx"]),
     (("markdown", "Markdown", "md文件", "MD文件"), ["md"]),
     (("javascript", "JavaScript", "js文件", "JS文件"), ["js"]),
@@ -50,6 +50,8 @@ def _extract_extensions(title: str) -> List[str]:
     for ext in sorted(COUNTABLE_EXTS, key=len, reverse=True):
         if re.search(rf"(?<![a-z0-9])\.?{re.escape(ext)}(?![a-z0-9])", lower):
             result.append(ext)
+    if result:
+        return unique_preserve_order(result)
     for aliases, mapped_exts in EXTENSION_ALIASES:
         if any(alias.lower() in lower for alias in aliases):
             result.extend(mapped_exts)
