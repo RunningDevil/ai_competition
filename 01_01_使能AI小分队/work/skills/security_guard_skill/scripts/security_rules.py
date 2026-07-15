@@ -116,6 +116,14 @@ ENV_SIGNAL_PATTERNS = [
 ]
 
 COMMAND_TOKEN_RE = re.compile(r"[A-Za-z0-9_@.+~:/\\-]+")
+TEXT_CODE_EXTS = {"md", "html", "xml", "java", "py", "js"}
+
+CODE_RESULT_QUERY_PATTERNS = [
+    r"(阅读|查看|分析|推断|判断).{0,40}\.(?:java|py|js|html|xml|md).{0,40}(运行结果|执行结果|输出结果|返回结果|返回值|打印结果)",
+    r"(运行结果|执行结果|输出结果|返回结果|返回值|打印结果).{0,40}\.(?:java|py|js|html|xml|md)",
+    r"(main方法|函数|方法).{0,30}(运行结果|执行结果|输出结果|返回结果|返回值|打印结果)",
+    r"\b(main|function|method)\b.{0,40}\b(output|result|return value|prints?)\b",
+]
 
 
 def _contains_any(patterns: List[str], text: str) -> Tuple[bool, str]:
@@ -284,6 +292,15 @@ def has_prompt_injection(text: str) -> Tuple[bool, str]:
     return _contains_any(PROMPT_INJECTION_PATTERNS, text)
 
 
+def is_code_result_query(text: str) -> bool:
+    return _contains_any(CODE_RESULT_QUERY_PATTERNS, text)[0]
+
+
+def is_text_code_path(path_text: str) -> bool:
+    ext = Path(normalize_path_text(path_text)).suffix.lower().lstrip(".")
+    return ext in TEXT_CODE_EXTS
+
+
 def check_resource(resource: Dict[str, Any], permission: Dict[str, Dict[str, List[str]]]) -> Tuple[bool, str, List[str]]:
     kind = normalize_text(resource.get("kind") or "text").lower()
     value = normalize_text(resource.get("value"))
@@ -363,8 +380,9 @@ def check_question(question_title: str, permission: Dict[str, Dict[str, List[str
     # If the question delegates to a referenced doc, scan only that referenced doc
     # as untrusted text. This catches hidden task injection without broad file reads.
     for docs_path, content in _read_referenced_docs(text, wiki_root):
+        code_result_query = is_code_result_query(text) and is_text_code_path(docs_path)
         dangerous, pattern = has_dangerous_action(content)
-        if dangerous and not command_info_query:
+        if dangerous and not command_info_query and not code_result_query:
             return False, f"引用文档包含高危动作 {docs_path}: {pattern}", [f"dangerous.document:{pattern}"]
         injection, pattern = has_prompt_injection(content)
         if injection:
